@@ -16,7 +16,8 @@ echo -e "\e[33m" # set colour
 # '-z 4' is to emulate scrolling with virtual buttons 4 and 4 + 1 (5)
 # fallback to PS/2 mouse if no USB mouse is found
 
-moused -p /dev/usm0 -z 4 || moused -p /dev/psm0 -z 4
+pkill moused
+moused -p /dev/ums0 -z 4 || moused -p /dev/psm0 -z 4
 
 PATH=$PATH:/usr/local/bin/
 aqua

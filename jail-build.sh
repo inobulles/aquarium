@@ -19,6 +19,10 @@ echo "cc -shared -fPIC main.c -o device -DWITHOUT_X11 \"\$@\"" >> /aqua-unix/src
 
 ( cd /aqua-unix/ && sh build.sh --devbranch aquabsd.alps --devices --kos --install )
 
+# install other necessary stuff
+
+mv /files/newvers.sh /usr/src/sys/conf/newvers.sh
+
 # build kernel & userspace
 
 echo -n "Compiling kernel and userland ..."
@@ -35,7 +39,8 @@ flags="WITHOUT_LIB32=yes WITHOUT_TOOLCHAIN=yes WITHOUT_TCSH=yes WITHOUT_FREEBSD_
 make buildkernel -j$thread_count
 make buildworld -j$thread_count $flags
 
-# TODO maybe this is a better way of doing things
+echo -n "Installing and setting up system ..."
+read _
 
 cd release/
 make bootonly -DNO_ROOT -DNODOCS -DNOPORTS -DNOSRC $flags
@@ -46,7 +51,7 @@ mv /usr/obj/usr/src/amd64.amd64/release/bootonly/ $root_dir
 # install necessary packages
 # TODO see if the fetching stage can be skipped with packages cached previously
 
-pkg -r $root_dir install pango librsvg2 icu
+pkg -r $root_dir install pango librsvg2
 
 # install other necessary stuff
 # e.g. all AQUA components
@@ -56,7 +61,13 @@ cp /usr/local/lib/libiar.a /usr/local/lib/libiar.so $root_dir/usr/local/lib/
 cp /usr/local/bin/iar $root_dir/usr/local/bin/
 
 mv /root/.aqua-root/ $root_dir/root/
+rm -rf $root_dir/root/.aqua-root/.git/
 mv /aqua-unix/ $root_dir
+
+mkdir -p $root_dir/root/.config/fontconfig/
+mv /files/fonts.conf $root_dir/root/.config/fontconfig/
+
+mv /files/rc.local $root_dir/etc/rc.local
 
 echo "#!/bin/sh" > $root_dir/install-aqua.sh
 echo "cd aqua-unix/ && sh build.sh --install" >> $root_dir/install-aqua.sh
@@ -70,6 +81,11 @@ rm $root_dir/install-aqua.sh
 # a bit of extra setup
 
 echo "kern.vty=sc" >> $root_dir/boot/loader.conf
+
+# TODO turn this into its own script maybe
+
+echo -n "Making final disk image ..."
+read _
 
 # make final UFS filesystem image
 

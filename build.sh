@@ -74,9 +74,17 @@ service jail start $jail_name
 
 echo "Entering build environment ..."
 
+rm -rf $jail/files/
+cp -r files $jail
+
 chmod +x jail-build.sh
 cp jail-build.sh $jail
 jexec $jail_name /jail-build.sh
+
+# our system should now be built
+
+mv $jail/aquabsd.img aquabsd.img
+echo "Done. Your final image should be available at '$(realpath aquabsd.img)'\n"
 
 # clean up
 

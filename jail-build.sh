@@ -49,14 +49,47 @@ root_dir=/rootfs/
 mv /usr/obj/usr/src/amd64.amd64/release/bootonly/ $root_dir
 
 # install necessary packages
+# in the future, these will be my own distributions aimed at having the least amount of dependencies possible
 # TODO see if the fetching stage can be skipped with packages cached previously
 
-pkg -r $root_dir install pango librsvg2
+pkg -r $root_dir install pango
+pkg -r $root_dir install librsvg2
 
-# remove all the unncecessary crap that was installed with those packages
+# remove all the unncecessary crap that was installed with those packages ('delete -f' means "delete package but not what depends on it")
 # use 'pkg -r $root_dir info' to see list of all installed packages
+# use 'pkg -r $root_dir info -l <package name>' to see all files linked to package
 
-pkg -r $root_dir delete -f dejavu
+pkg -r $root_dir delete -f python38 # entire programs I never asked for
+pkg -r $root_dir delete -f dejavu encodings font-bh-ttf font-misc-meltho font-misc-ethiopic # fonts I never asked for
+# something in here I can't remove
+# pkg -r $root_dir delete -f libX11 libXau libXdmcp libXext libXft libXrender # X11-related libraries I never asked for
+# pkg -r $root_dir delete -f xorg-fonts-truetype xorgproto libxcb # XCB-related libraries I never asked for
+pkg -r $root_dir delete -f mkfontscale # X11-related tools I never asked for
+
+rm -rf $root_dir/usr/share/man/
+rm -rf $root_dir/usr/share/doc/
+
+rm -rf $root_dir/usr/local/man/
+rm -rf $root_dir/usr/local/share/doc/
+rm -rf $root_dir/usr/local/share/gtk-doc/
+
+rm -rf $root_dir/usr/lib/debug # TODO this is like 1/3 of the image size lol... where is this coming from?
+
+# TODO a bunch of other questionable stuff to remove that I need to doublecheck
+
+rm -rf $root_dir/var/*
+
+rm -rf $root_dir/usr/share/i18n/
+rm -rf $root_dir/usr/share/locale/
+rm -rf $root_dir/usr/share/misc/
+rm -rf $root_dir/usr/share/openssl/
+
+# rm -rf $root_dir/usr/local/share/icu/
+rm -rf $root_dir/usr/local/share/locale/
+
+rm /rootfs/usr/local/lib/*.a
+rm /rootfs/usr/local/lib/*.so
+rm /rootfs/usr/local/lib/*.so.*.*
 
 # install other necessary stuff
 # e.g. all AQUA components

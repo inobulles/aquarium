@@ -53,6 +53,11 @@ mv /usr/obj/usr/src/amd64.amd64/release/bootonly/ $root_dir
 
 pkg -r $root_dir install pango librsvg2
 
+# remove all the unncecessary crap that was installed with those packages
+# use 'pkg -r $root_dir info' to see list of all installed packages
+
+pkg -r $root_dir delete -f dejavu
+
 # install other necessary stuff
 # e.g. all AQUA components
 
@@ -60,14 +65,9 @@ cp /usr/local/include/iar.h $root_dir/usr/local/include/
 cp /usr/local/lib/libiar.a /usr/local/lib/libiar.so $root_dir/usr/local/lib/
 cp /usr/local/bin/iar $root_dir/usr/local/bin/
 
-mv /root/.aqua-root/ $root_dir/root/
+mv /root/.aqua-root $root_dir/root/
 rm -rf $root_dir/root/.aqua-root/.git/
 mv /aqua-unix/ $root_dir
-
-mkdir -p $root_dir/root/.config/fontconfig/
-mv /files/fonts.conf $root_dir/root/.config/fontconfig/
-
-mv /files/rc.local $root_dir/etc/rc.local
 
 echo "#!/bin/sh" > $root_dir/install-aqua.sh
 echo "cd aqua-unix/ && sh build.sh --install" >> $root_dir/install-aqua.sh
@@ -77,6 +77,14 @@ chroot $root_dir /install-aqua.sh
 
 rm -rf $root_dir/aqua-unix/
 rm $root_dir/install-aqua.sh
+
+mkdir -p $root_dir/usr/local/etc/fonts/
+mv /files/fonts.conf $root_dir/usr/local/etc/fonts/
+
+rm -rf $root_dir/usr/local/etc/fonts/conf.d/
+rm -rf $root_dir/usr/share/fonts/
+
+mv /files/rc.local $root_dir/etc/rc.local
 
 # a bit of extra setup
 

@@ -31,7 +31,7 @@ use_memdisk=
 if [ $use_memdisk ]; then
 	dist_pool="aquabsd_dist" # name of the ZFS pool in which the distribution will be created
 
-	truncate -s 8G $dist_image # probably won't need more than 8 GB
+	truncate -s 8G $dist_image # probably won't need more than 16 GB
 	mdisk_id=$(mdconfig -a -f $dist_image)
 
 	mdisk_dev="/dev/$mdisk_id"

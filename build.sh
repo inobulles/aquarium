@@ -84,7 +84,7 @@ jexec $jail_name /jail-build.sh
 # our system should now be built
 
 mv $jail/aquabsd.img aquabsd.img
-echo "Done. Your final image should be available at '$(realpath aquabsd.img)'\n"
+echo "Done. Your final image should be available at '$(realpath aquabsd.img)'"
 
 # clean up
 

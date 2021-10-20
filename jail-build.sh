@@ -122,6 +122,7 @@ mv /files/rc.local $root_dir/etc/rc.local
 # a bit of extra setup
 
 echo "kern.vty=sc" >> $root_dir/boot/loader.conf
+ln -s $root_dir/tmp/installer/resolv.conf $root_dir/etc/resolv.conf
 
 # TODO turn this into its own script maybe
 

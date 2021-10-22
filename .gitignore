@@ -1,5 +1,5 @@
-REMME.md
 dist/
-dist_image.img
-aquabsd.img
-REMME/
+out/
+src/
+rootfs/
+*.core

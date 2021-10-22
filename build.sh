@@ -1,105 +1,92 @@
-#!/usr/bin/env sh
+#!/bin/sh
 set -e
 
-# options
+rootfs="rootfs"
+dist="dist"
+src="src"
+out="out"
 
-dist="dist/"
-dist_image="dist_image.img"
+# download missing components
 
-# TODO check that we are indeed running as root
-# TODO check that we are actually running on aquaBSD/FreeBSD
-# TODO check that we are on AMD64
+mkdir -p $dist
 
-# clean up previous build files if there are any
+if [ ! -f $dist/kernel.txz ]; then fetch https://github.com/inobulles/aquabsd-core/releases/download/v1021a-beta/kernel.txz -o $dist/kernel.txz; fi
+if [ ! -f $dist/base.txz   ]; then fetch https://github.com/inobulles/aquabsd-core/releases/download/v1021a-beta/base.txz   -o $dist/base.txz  ; fi
+if [ ! -f $dist/src.tgz    ]; then fetch https://github.com/inobulles/aquabsd-core/archive/refs/tags/v1021a-beta.tar.gz     -o $dist/src.tgz   ; fi
 
-if [ -d $dist ]; then
-	echo -n "A previous distribution directory was found ($dist). You can either change the 'dist' option in 'build.sh' to select a different destination, either press enter here to delete the distribution directory ..."
-	read _
+rm -rf $src
+mkdir $src
 
-	# TODO
+if [ -d $rootfs ]; then
+	chflags -R noschg $rootfs
 fi
 
-echo -n "Creating build environment ..."
-read _
+rm -rf $rootfs $out
+mkdir $rootfs $out
 
-# create memdisk and ZFS file system on it for the build environment
+# extract the source (we need some files from there which are not included in the distributions)
 
-mkdir $dist
+echo "[BOB] Extracting source ..."
 
-use_memdisk=
+tar -xf $dist/src.tgz -C $src
+mv $src/*/* $src
 
-if [ $use_memdisk ]; then
-	dist_pool="aquabsd_dist" # name of the ZFS pool in which the distribution will be created
+# extract the kernel and base distributions to our rootfs
 
-	truncate -s 8G $dist_image # probably won't need more than 16 GB
-	mdisk_id=$(mdconfig -a -f $dist_image)
+echo "[BOB] Extracting kernel ..."
+tar -xf $dist/kernel.txz -C $rootfs
 
-	mdisk_dev="/dev/$mdisk_id"
-	zpool create $dist_pool $mdisk_dev
+echo "[BOB] Extracting base ..."
+tar -xf $dist/base.txz -C $rootfs
 
-	zfs set mountpoint=$(realpath $dist) $dist_pool
-	# TODO set ZFS compression and other features?
-fi
+# set up all the other stuff we need to create a functionnal installer image
 
-# set up vanilla FreeBSD jail with only the 'base' & 'src' distributions
+echo "[BOB] Setting up ..."
 
-jail="$dist/jail/"
-mkdir $jail
+ln -s "/tmp/installer/resolv.conf" $rootfs/etc/resolv.conf
+cp $src/release/rc.local $rootfs/etc
 
-export DISTRIBUTIONS="base.txz src.txz" # 'lib32' isn't necessary whatsoever for just the build jail
-export BSDINSTALL_DISTDIR=$(realpath $dist)
-export BSDINSTALL_DISTSITE=ftp://ftp.freebsd.org/pub/FreeBSD/releases/amd64/$(uname -r)
-export BSDINSTALL_CHROOT=$(realpath $jail)
+echo "sendmail_enable=\"NONE\"" > $rootfs/etc/rc.conf
+echo "hostid_enable=\"NO\"" >> $rootfs/etc/rc.conf
+echo "debug.witness.trace=0" >> $rootfs/etc/sysctl.conf
 
-#chflags -R noschg $BSDINSTALL_CHROOT # TODO is this necessary?
+# set up bootloader
 
-bsdinstall distfetch
-bsdinstall distextract
+echo "vfs.mountroot.timeout=\"10\"" >> $rootfs/boot/loader.conf
+echo "kernels_autodetect=\"NO\"" >> $rootfs/boot/loader.conf
+echo "kern.vty=sc" >> $rootfs/boot/loader.conf
+echo "autoboot_delay=\"0\"" >> $rootfs/boot/loader.conf
 
-cp /etc/resolv.conf $jail/etc/resolv.conf # necessary for networking to work inside the jail
+# make final UFS filesystem image
 
-# apply necessary configurations and modifications to kernel and base
+echo "[BOB] Creating UFS filesystem image ..."
 
-echo "Applying necessary configurations and modifications to the kernel and userland ..."
+label="aquabsd-install"
+image="$out/aquabsd.img"
 
-# start up the jail and build kernel and base
+echo "/dev/ufs/$label / ufs ro,noatime 1 1" > $rootfs/etc/fstab
+echo "root_rw_mount=\"NO\"" > $rootfs/etc/rc.conf.local
 
-jail_name="aquabsd_dist"
-jail -c name=$jail_name path=$(realpath $jail) exec.start="/bin/sh /etc/rc" exec.stop="/bin/sh /etc/rc.shutdown" mount.devfs allow.nomount host.hostname=$jail_name ip4=inherit ip6=inherit
+makefs -B little -o label=$label -o version=2 $image.part $rootfs
 
-echo "$jail_name { path = "$(realpath $jail)"; } " >> /etc/jail.conf # TODO is there not a better (more temporary) way to do this? (e.g. take a look at how Poudrière does it)
-service jail start $jail_name
+# make EFI System Partition (ESP)
 
-# actually enter the jail and run the 'jail-build.sh' script
+echo "[BOB] Creating ESP image ..."
 
-echo "Entering build environment ..."
+. $src/tools/boot/install-boot.sh # include a bunch of helpful functions
 
-rm -rf $jail/files/
-cp -r files $jail
+esp_image="$out/esp.img"
+make_esp_file $esp_image $fat32min $rootfs/boot/loader.efi
 
-chmod +x jail-build.sh
-cp jail-build.sh $jail
-jexec $jail_name /jail-build.sh
+# assemble final system image
 
-# our system should now be built
+echo "[BOB] Assembling final image ..."
 
-mv $jail/aquabsd.img aquabsd.img
-echo "Done. Your final image should be available at '$(realpath aquabsd.img)'"
+mkimg -s mbr -b $rootfs/boot/mbr -p efi:=$esp_image -p freebsd:-"mkimg -s bsd -b $rootfs/boot/boot -p freebsd-ufs:=$image.part" -a 2 -o $image
 
-# clean up
+# cleanup
 
-echo -n "Cleaning up ..."
-read _
+rm $esp_image
+rm $image.part
 
-service jail stop $jail_name
-
-if [ $use_memdisk ]; then
-	umount $dist
-
-	zpool destroy $dist_pool
-	rm $dist_image
-
-	mdconfig -d -u $mdisk_id
-fi
-
-rm -rf $dist
+echo "[BOB] Done"

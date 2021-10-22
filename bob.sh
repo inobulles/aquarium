@@ -89,4 +89,4 @@ mkimg -s mbr -b $rootfs/boot/mbr -p efi:=$esp_image -p freebsd:-"mkimg -s bsd -b
 rm $esp_image
 rm $image.part
 
-echo "[BOB] Done"
+echo "[BOB] Done (output is in $out/$image)"

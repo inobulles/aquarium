@@ -1,0 +1,21 @@
+compute_engine_instance:
+  platform: freebsd
+  image_project: freebsd-org-cloud-dev
+  image: freebsd-13-0-release-amd64
+  cpu: 1
+  memory: 4G
+
+task:
+  name: Build aquaBSD installer image
+  timeout_in: 30m
+  setup_script:
+  - uname -a
+  - df -h
+  - pkg --version
+  script:
+  - sh bob.sh
+  post_script:
+  - ls -la out/
+  - df -h
+  image_artifact:
+    path: "out/aquabsd.img"

@@ -46,7 +46,8 @@ echo "[BOB] Setting up ..."
 ln -s "/tmp/installer/resolv.conf" $rootfs/etc/resolv.conf
 cp $src/release/rc.local $rootfs/etc
 
-echo "sendmail_enable=\"NONE\"" > $rootfs/etc/rc.conf
+echo "hostname=aquabsd-installer" > $rootfs/etc/rc.conf
+echo "sendmail_enable=\"NONE\"" >> $rootfs/etc/rc.conf
 echo "hostid_enable=\"NO\"" >> $rootfs/etc/rc.conf
 echo "debug.witness.trace=0" >> $rootfs/etc/sysctl.conf
 
@@ -61,7 +62,7 @@ echo "autoboot_delay=\"0\"" >> $rootfs/boot/loader.conf
 
 echo "[BOB] Creating UFS filesystem image ..."
 
-label="aquabsd-install"
+label="aquabsd-installer"
 image="$out/aquabsd.img"
 
 echo "/dev/ufs/$label / ufs ro,noatime 1 1" > $rootfs/etc/fstab
@@ -89,4 +90,5 @@ mkimg -s mbr -b $rootfs/boot/mbr -p efi:=$esp_image -p freebsd:-"mkimg -s bsd -b
 rm $esp_image
 rm $image.part
 
-echo "[BOB] Done (output is in $out/$image)"
+xz -9 -T $(sysctl -n hw.ncpu) $image
+echo "[BOB] Done (output is in $image.xz)"

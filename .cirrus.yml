@@ -15,7 +15,7 @@ task:
   script:
   - sh bob.sh
   post_script:
-  - ls -la out/
+  - ls -lah out/
   - df -h
-  image_artifact:
-    path: "out/aquabsd.img"
+  image_artifacts:
+    path: "out/aquabsd.img.xz"

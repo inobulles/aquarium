@@ -80,8 +80,11 @@ if [ -d files/ ]; then
 fi
 
 cp /etc/resolv.conf $rootfs/etc/resolv.conf # so that DNS works in chroot
+touch $rootfs/dev/null # to stop pkg-static from complaining
+
 chroot $rootfs /bin/sh < custom.sh
 
+rm $rootfs/dev/null
 rm -rf $rootfs/tmp/*
 
 rm $rootfs/etc/resolv.conf

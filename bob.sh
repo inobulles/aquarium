@@ -1,6 +1,11 @@
 #!/bin/sh
 set -e
 
+if [ "$(id -u)" != "0" ]; then
+	echo "This script must be run as root"
+	exit 1
+fi
+
 version="v1021a-beta"
 rootfs="rootfs"
 dist="dist"
@@ -44,7 +49,6 @@ tar -xf $dist/base.txz -C $rootfs
 
 echo "[BOB] Setting up ..."
 
-ln -s "/tmp/installer/resolv.conf" $rootfs/etc/resolv.conf
 cp $src/release/rc.local $rootfs/etc
 
 echo "hostname=aquabsd-installer" > $rootfs/etc/rc.conf
@@ -61,8 +65,21 @@ echo "autoboot_delay=\"0\"" >> $rootfs/boot/loader.conf
 
 # custom setup
 
-echo "[BOB] Including custom setup script ..."
-. custom.sh
+echo "[BOB] Running custom setup script in chroot ..."
+
+pkg_repo_conf_dir="/usr/local/etc/pkg/repos/"
+pkg_repo_conf="$pkg_repo_conf_dir/FreeBSD.conf"
+
+if [ -f $pkg_repo_conf ]; then
+	mkdir -p $rootfs/$pkg_repo_conf_dir
+	cp $pkg_repo_conf $rootfs/$pkg_repo_conf
+fi
+
+cp /etc/resolv.conf $rootfs/etc/resolv.conf # so that DNS works in chroot
+chroot $rootfs /bin/sh < custom.sh
+
+rm $rootfs/etc/resolv.conf
+ln -s "/tmp/installer/resolv.conf" $rootfs/etc/resolv.conf
 
 # make final UFS filesystem image
 
@@ -96,5 +113,5 @@ mkimg -s mbr -b $rootfs/boot/mbr -p efi:=$esp_image -p freebsd:-"mkimg -s bsd -b
 rm $esp_image
 rm $image.part
 
-xz -v -9 -T $(sysctl -n hw.ncpu) $image
+#xz -v -9 -T $(sysctl -n hw.ncpu) $image
 echo "[BOB] Done (output is in $image.xz)"

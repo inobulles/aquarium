@@ -75,8 +75,14 @@ if [ -f $pkg_repo_conf ]; then
 	cp $pkg_repo_conf $rootfs/$pkg_repo_conf
 fi
 
+if [ -d files/ ]; then
+	cp -r files $rootfs/tmp/files
+fi
+
 cp /etc/resolv.conf $rootfs/etc/resolv.conf # so that DNS works in chroot
 chroot $rootfs /bin/sh < custom.sh
+
+rm -rf $rootfs/tmp/*
 
 rm $rootfs/etc/resolv.conf
 ln -s "/tmp/installer/resolv.conf" $rootfs/etc/resolv.conf

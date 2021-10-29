@@ -68,8 +68,3 @@ rm -rf /var/*
 rm /usr/local/lib/*.a
 rm /usr/local/lib/*.so
 rm /usr/local/lib/*.so.*.*
-
-# clean up everything in '/tmp'
-
-cd /
-rm -rf /tmp/*

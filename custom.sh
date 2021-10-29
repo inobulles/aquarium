@@ -22,8 +22,7 @@ pkg install -y pango librsvg2
 pkg_out="packages"
 mkdir -p $pkg_out
 
-mv files/packages/aqua.pkg $pkg_out
-
+fetch $repo_url/aqua-$short_version.pkg          -o $pkg_out
 fetch $repo_url/iar-$short_version.pkg           -o $pkg_out
 fetch $repo_url/libcopyfile-$short_version.pkg   -o $pkg_out
 fetch $repo_url/libiar-$short_version.pkg        -o $pkg_out
@@ -33,9 +32,19 @@ for package in $(find $pkg_out); do
 	pkg add $package
 done
 
+# install aqua root
+
+pkg install -y git-lite
+
+git clone https://github.com/inobulles/aqua-root --depth 1 -b main
+mv aqua-root /root/.aqua-root
+
+pkg remove git-lite
+
 # install extra files
 
-mv files/.aqua-root /root/.aqua-root
+mv files/aquabsd.alps.ui.device /usr/share/aqua/devices/aquabsd.alps.ui.device
+mv files/installer.zpk /root/.aqua-root/boot.zpk
 mv files/fonts.conf /usr/local/etc/fonts/
 
 # remove all the unncecessary crap that was installed with those packages ('delete -f' means "delete package but not what depends on it")

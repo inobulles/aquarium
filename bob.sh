@@ -1,6 +1,7 @@
 #!/bin/sh
 set -e
 
+version="v1021a-beta"
 rootfs="rootfs"
 dist="dist"
 src="src"
@@ -10,9 +11,9 @@ out="out"
 
 mkdir -p $dist
 
-if [ ! -f $dist/kernel.txz ]; then fetch https://github.com/inobulles/aquabsd-core/releases/download/v1021a-beta/kernel.txz -o $dist/kernel.txz; fi
-if [ ! -f $dist/base.txz   ]; then fetch https://github.com/inobulles/aquabsd-core/releases/download/v1021a-beta/base.txz   -o $dist/base.txz  ; fi
-if [ ! -f $dist/src.tgz    ]; then fetch https://github.com/inobulles/aquabsd-core/archive/refs/tags/v1021a-beta.tar.gz     -o $dist/src.tgz   ; fi
+if [ ! -f $dist/kernel.txz ]; then fetch https://github.com/inobulles/aquabsd-core/releases/download/$version/kernel.txz -o $dist/kernel.txz; fi
+if [ ! -f $dist/base.txz   ]; then fetch https://github.com/inobulles/aquabsd-core/releases/download/$version/base.txz   -o $dist/base.txz  ; fi
+if [ ! -f $dist/src.tgz    ]; then fetch https://github.com/inobulles/aquabsd-core/archive/refs/tags/$version.tar.gz     -o $dist/src.tgz   ; fi
 
 rm -rf $src
 mkdir $src

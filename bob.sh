@@ -90,5 +90,5 @@ mkimg -s mbr -b $rootfs/boot/mbr -p efi:=$esp_image -p freebsd:-"mkimg -s bsd -b
 rm $esp_image
 rm $image.part
 
-xz -9 -T $(sysctl -n hw.ncpu) $image
+xz -v -9 -T $(sysctl -n hw.ncpu) $image
 echo "[BOB] Done (output is in $image.xz)"

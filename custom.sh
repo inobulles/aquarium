@@ -31,6 +31,7 @@ fetch $repo_url/libiar-$short_version.pkg        -o $pkg_out
 fetch $repo_url/libmkfs_msdos-$short_version.pkg -o $pkg_out
 
 for package in $(find $pkg_out -type f); do
+	# our packaged are built under 'FreeBSD:13:amd64', so prevent 'pkg' from complaining about that
 	ABI="FreeBSD:13:amd64" pkg add $package
 done
 
@@ -39,7 +40,7 @@ done
 pkg install -y git-lite
 
 git clone https://github.com/inobulles/aqua-root --depth 1 -b main
-mv aqua-root /root/.aqua-root
+mv aqua-root /.aqua-root
 
 pkg remove -y git-lite
 pw userdel git_daemon
@@ -47,7 +48,7 @@ pw userdel git_daemon
 # install extra files
 
 mv files/aquabsd.alps.ui.device /usr/share/aqua/devices/aquabsd.alps.ui.device
-mv files/installer.zpk /root/.aqua-root/boot.zpk
+mv files/installer.zpk /.aqua-root/boot.zpk
 mv files/fonts.conf /usr/local/etc/fonts/
 
 # remove all the unncecessary crap that was installed with those packages ('delete -f' means "delete package but not what depends on it")

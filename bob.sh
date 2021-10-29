@@ -58,6 +58,11 @@ echo "kernels_autodetect=\"NO\"" >> $rootfs/boot/loader.conf
 echo "kern.vty=sc" >> $rootfs/boot/loader.conf
 echo "autoboot_delay=\"0\"" >> $rootfs/boot/loader.conf
 
+# custom setup
+
+echo "[BOB] Including custom setup script ..."
+. custom.sh
+
 # make final UFS filesystem image
 
 echo "[BOB] Creating UFS filesystem image ..."

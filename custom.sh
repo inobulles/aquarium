@@ -19,8 +19,10 @@ pkg install -y pango librsvg2
 
 # install necessary packages for the aquaBSD installer
 
-pkg_out="packages"
+pkg_out="packages/"
 mkdir -p $pkg_out
+
+export SSL_NO_VERIFY_PEER=1
 
 fetch $repo_url/aqua-$short_version.pkg          -o $pkg_out
 fetch $repo_url/iar-$short_version.pkg           -o $pkg_out
@@ -28,8 +30,8 @@ fetch $repo_url/libcopyfile-$short_version.pkg   -o $pkg_out
 fetch $repo_url/libiar-$short_version.pkg        -o $pkg_out
 fetch $repo_url/libmkfs_msdos-$short_version.pkg -o $pkg_out
 
-for package in $(find $pkg_out); do
-	pkg add $package
+for package in $(find $pkg_out -type f); do
+	ABI="FreeBSD:13:amd64" pkg add $package
 done
 
 # install aqua root
@@ -39,7 +41,8 @@ pkg install -y git-lite
 git clone https://github.com/inobulles/aqua-root --depth 1 -b main
 mv aqua-root /root/.aqua-root
 
-pkg remove git-lite
+pkg remove -y git-lite
+pw userdel git_daemon
 
 # install extra files
 
@@ -54,12 +57,12 @@ mv files/fonts.conf /usr/local/etc/fonts/
 rm -rf /usr/local/etc/fonts/conf.d/
 rm -rf /usr/share/fonts/
 
-pkg delete -f python38 # entire programs I never asked for
-pkg delete -f dejavu encodings font-bh-ttf font-misc-meltho font-misc-ethiopic # fonts I never asked for
+pkg delete -fy python38 # entire programs I never asked for
+pkg delete -fy dejavu encodings font-bh-ttf font-misc-meltho font-misc-ethiopic # fonts I never asked for
 # something in here I can't remove
 # pkg delete -f libX11 libXau libXdmcp libXext libXft libXrender # X11-related libraries I never asked for
 # pkg delete -f xorg-fonts-truetype xorgproto libxcb # XCB-related libraries I never asked for
-pkg delete -f mkfontscale # X11-related tools I never asked for
+pkg delete -fy mkfontscale # X11-related tools I never asked for
 
 rm -rf /usr/share/man/
 rm -rf /usr/share/doc/

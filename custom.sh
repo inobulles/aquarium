@@ -1,6 +1,9 @@
 #!/bin/sh
 set -e
 
+# TODO REMME
+# LD_DYNAMIC_WEAK=0 aqua --devices /usr/share/aqua/devices
+
 # this is where any custom configuration of the final system goes
 # e.g., if you wanted to install 'vim', you'd add the following to this file:
 
@@ -48,6 +51,7 @@ pw userdel git_daemon
 # install extra files
 
 mv files/aquabsd.alps.ui.device /usr/share/aqua/devices/aquabsd.alps.ui.device
+mv files/aquabsd.alps.vga.device /usr/share/aqua/devices/aquabsd.alps.vga.device
 mv files/installer.zpk /.aqua-root/boot.zpk
 mv files/fonts.conf /usr/local/etc/fonts/
 
@@ -78,6 +82,6 @@ rm -rf /usr/lib/debug # TODO this is like 1/3 of the image size lol... where is 
 
 rm -rf /var/*
 
-rm /usr/local/lib/*.a
-rm /usr/local/lib/*.so
-rm /usr/local/lib/*.so.*.*
+# rm /usr/local/lib/*.a
+# rm /usr/local/lib/*.so
+# rm /usr/local/lib/*.so.*.*

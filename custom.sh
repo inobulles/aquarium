@@ -66,12 +66,24 @@ pkg delete -fy dejavu encodings font-bh-ttf font-misc-meltho font-misc-ethiopic 
 # pkg delete -f xorg-fonts-truetype xorgproto libxcb # XCB-related libraries I never asked for
 pkg delete -fy mkfontscale # X11-related tools I never asked for
 
+rm -rf /rescue/
+
 rm -rf /usr/share/man/
 rm -rf /usr/share/doc/
+rm -rf /usr/share/i81n/
+
+mv /usr/share/locale/C.UTF-8 /C.UTF-8
+rm -rf /usr/share/locale/
+mv /C.UTF-8 /usr/share/locale/C.UTF-8
+
+# don't remove /usr/share/misc/ plz
 
 rm -rf /usr/local/man/
 rm -rf /usr/local/share/doc/
 rm -rf /usr/local/share/gtk-doc/
+rm -rf /usr/local/share/gir-1.0/
+rm -rf /usr/local/share/glib-2.0/
+rm -rf /usr/local/share/mime/
 
 rm -rf /usr/lib/debug # TODO this is like 1/3 of the image size lol... where is this coming from?
 
@@ -79,7 +91,14 @@ rm -rf /usr/lib/debug # TODO this is like 1/3 of the image size lol... where is 
 
 rm -rf /var/*
 
-# rm /usr/local/lib/*.a
+rm -rf /usr/lib/clang/
+rm -rf /usr/lib/*.a
+
+rm /usr/local/sbin/pkg-static* # shouldn't need this, right?
+
+rm -rf /usr/local/include
+
+rm /usr/local/lib/*.a
 # rm /usr/local/lib/*.so
 # rm /usr/local/lib/*.so.*.*
 

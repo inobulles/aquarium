@@ -1,9 +1,6 @@
 #!/bin/sh
 set -e
 
-# TODO REMME
-# LD_DYNAMIC_WEAK=0 aqua --devices /usr/share/aqua/devices
-
 # this is where any custom configuration of the final system goes
 # e.g., if you wanted to install 'vim', you'd add the following to this file:
 
@@ -85,3 +82,7 @@ rm -rf /var/*
 # rm /usr/local/lib/*.a
 # rm /usr/local/lib/*.so
 # rm /usr/local/lib/*.so.*.*
+
+# TODO fix em properly
+
+sed -i '' 's/^aqua$/LD_DYNAMIC_WEAK=0 aqua --devices \/usr\/share\/aqua\/devices/g' /etc/rc.local

@@ -70,10 +70,10 @@ rm -rf /rescue/
 
 rm -rf /usr/share/man/
 rm -rf /usr/share/doc/
-rm -rf /usr/share/i81n/
+rm -rf /usr/share/i18n/
 
 mv /usr/share/locale/C.UTF-8 /C.UTF-8
-rm -rf /usr/share/locale/
+rm -rf /usr/share/locale/*
 mv /C.UTF-8 /usr/share/locale/C.UTF-8
 
 # don't remove /usr/share/misc/ plz
@@ -84,6 +84,7 @@ rm -rf /usr/local/share/gtk-doc/
 rm -rf /usr/local/share/gir-1.0/
 rm -rf /usr/local/share/glib-2.0/
 rm -rf /usr/local/share/mime/
+rm -rf /usr/local/share/locale/
 
 rm -rf /usr/lib/debug # TODO this is like 1/3 of the image size lol... where is this coming from?
 
@@ -99,8 +100,6 @@ rm /usr/local/sbin/pkg-static* # shouldn't need this, right?
 rm -rf /usr/local/include
 
 rm /usr/local/lib/*.a
-# rm /usr/local/lib/*.so
-# rm /usr/local/lib/*.so.*.*
 
 # TODO fix em properly
 

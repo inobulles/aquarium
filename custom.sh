@@ -41,6 +41,7 @@ pkg install -y git-lite
 
 git clone https://github.com/inobulles/aqua-root --depth 1 -b main
 mv aqua-root /root/.aqua-root
+rm -rf /root/.aqua-root/.git
 
 pkg remove -y git-lite
 pw userdel git_daemon

@@ -101,6 +101,6 @@ rm -rf /usr/local/include
 
 rm /usr/local/lib/*.a
 
-# TODO fix em properly
+# TODO fix this properly
 
-sed -i '' 's/^aqua$/LD_DYNAMIC_WEAK=0 aqua --devices \/usr\/share\/aqua\/devices/g' /etc/rc.local
+sed -i '' 's/^aqua$/aqua --devices \/usr\/share\/aqua\/devices/g' /etc/rc.local

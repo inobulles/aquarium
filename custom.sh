@@ -40,7 +40,7 @@ done
 pkg install -y git-lite
 
 git clone https://github.com/inobulles/aqua-root --depth 1 -b main
-mv aqua-root /.aqua-root
+mv aqua-root /root/.aqua-root
 
 pkg remove -y git-lite
 pw userdel git_daemon
@@ -49,7 +49,7 @@ pw userdel git_daemon
 
 mv files/aquabsd.alps.ui.device /usr/share/aqua/devices/aquabsd.alps.ui.device
 mv files/aquabsd.alps.vga.device /usr/share/aqua/devices/aquabsd.alps.vga.device
-mv files/installer.zpk /.aqua-root/boot.zpk
+mv files/installer.zpk /root/.aqua-root/boot.zpk
 mv files/fonts.conf /usr/local/etc/fonts/
 
 # remove all the unncecessary crap that was installed with those packages ('delete -f' means "delete package but not what depends on it")
@@ -100,7 +100,3 @@ rm /usr/local/sbin/pkg-static* # shouldn't need this, right?
 rm -rf /usr/local/include
 
 rm /usr/local/lib/*.a
-
-# TODO fix this properly
-
-sed -i '' 's/^aqua$/aqua --devices \/usr\/share\/aqua\/devices/g' /etc/rc.local

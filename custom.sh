@@ -7,8 +7,8 @@ set -e
 # pkg install -y vim
 
 branch="aquabsd.alps"
-version="v1021a-beta"
-short_version="1021a"
+short_version="1221a"
+version="v$short_version-beta"
 repo_url="https://github.com/inobulles/aquabsd-pkg-repo/releases/download/$version"
 
 cd /tmp

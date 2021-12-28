@@ -15,6 +15,7 @@ cd /tmp
 
 # install external dependencies for the aquaBSD installer
 
+export IGNORE_OSVERSION=yes
 pkg install -y pango librsvg2
 
 # install necessary packages for the aquaBSD installer
@@ -31,7 +32,7 @@ fetch $repo_url/libiar-$short_version.pkg        -o $pkg_out
 fetch $repo_url/libmkfs_msdos-$short_version.pkg -o $pkg_out
 
 for package in $(find $pkg_out -type f); do
-	# our packaged are built under 'FreeBSD:13:amd64', so prevent 'pkg' from complaining about that
+	# our packages are built under 'FreeBSD:13:amd64', so prevent 'pkg' from complaining about that
 	ABI="FreeBSD:13:amd64" pkg add $package
 done
 
@@ -67,8 +68,6 @@ pkg delete -fy dejavu encodings font-bh-ttf font-misc-meltho font-misc-ethiopic 
 # pkg delete -f xorg-fonts-truetype xorgproto libxcb # XCB-related libraries I never asked for
 pkg delete -fy mkfontscale # X11-related tools I never asked for
 
-rm -rf /rescue/
-
 rm -rf /usr/share/man/
 rm -rf /usr/share/doc/
 rm -rf /usr/share/i18n/
@@ -101,3 +100,7 @@ rm /usr/local/sbin/pkg-static* # shouldn't need this, right?
 rm -rf /usr/local/include
 
 rm /usr/local/lib/*.a
+
+# it's back... oh no... it's back
+
+sed -i '' 's/^aqua$/LD_DYNAMIC_WEAK=0 aqua --devices \/usr\/share\/aqua\/devices/g' /etc/rc.local

@@ -56,11 +56,14 @@ enum {
 
 typedef struct {
 	char* name;
+	bob_os_t os;
 } bob_vessel_t;
 
 void bob_set_verbose(unsigned verbose);
 
 bob_vessel_t* bob_new_vessel(const char* name);
 void bob_del_vessel(bob_vessel_t* vessel);
+
+void bob_vessel_os(bob_vessel_t* vessel, bob_os_t os);
 
 #endif

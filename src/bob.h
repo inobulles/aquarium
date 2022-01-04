@@ -78,5 +78,6 @@ void bob_vessel_os(bob_vessel_t* vessel, bob_os_t os);
 // vessel component functions
 
 int bob_vessel_net_component(bob_vessel_t* vessel, const char* name, const char* url);
+int bob_vessel_component_extract(bob_vessel_t* vessel, const char* name);
 
 #endif

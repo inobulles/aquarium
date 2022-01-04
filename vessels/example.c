@@ -19,6 +19,9 @@ int main(void) {
 	bob_vessel_net_component(vessel, "base",   SOURCE VERSION "/base.txz");
 	// bob_vessel_local_component(vessel, "example.txz");
 
+	bob_vessel_component_extract(vessel, "kernel");
+	bob_vessel_component_extract(vessel, "base");
+
 	// // specfic configuration
 
 	// bob_vessel_hostname(vessel, vessel->name);

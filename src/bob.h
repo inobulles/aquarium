@@ -48,7 +48,7 @@
 
 // other macros
 
-enum {
+typedef enum {
 	BOB_OS_AQUABSD,
 	BOB_OS_FREEBSD,
 	BOB_OS_SYSTEMD,
@@ -59,11 +59,21 @@ typedef struct {
 	bob_os_t os;
 } bob_vessel_t;
 
+// global settings functions
+
 void bob_set_verbose(unsigned verbose);
+
+// vessel creation/destruction functions
 
 bob_vessel_t* bob_new_vessel(const char* name);
 void bob_del_vessel(bob_vessel_t* vessel);
 
+// vessel settings functions
+
 void bob_vessel_os(bob_vessel_t* vessel, bob_os_t os);
+
+// vessel component functions
+
+int bob_vessel_net_component(bob_vessel_t* vessel, const char* url);
 
 #endif

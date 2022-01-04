@@ -1,5 +1,12 @@
 #include <bob.h>
 
+// TODO the two following headers are necessary for 'fetch.h' but are not included
+//      most likely a bug, fix this
+
+#include <sys/param.h>
+#include <time.h>
+
+#include <fetch.h>
 #include <stdlib.h>
 
 #define CHECK_VESSEL(vessel) \
@@ -46,3 +53,7 @@ void bob_vessel_os(bob_vessel_t* vessel, bob_os_t os) {
 
 // vessel component functions
 
+int bob_vessel_net_component(bob_vessel_t* vessel, const char* url) {
+	BOB_FATAL("%s not yet implemented\n", __func__)
+	return -1;
+}

@@ -1,0 +1,56 @@
+#if !defined(__BOB_THE_BUILDER_LIB)
+#define __BOB_THE_BUILDER_LIB
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define BOB_LOG_SIGNATURE "[BOB]"
+
+#define BOB_LOG_REGULAR "\033[0m"
+#define BOB_LOG_RED     "\033[0;31m"
+#define BOB_LOG_GREEN   "\033[0;32m"
+#define BOB_LOG_YELLOW  "\033[0;33m"
+
+#define BOB_INFO(...) \
+	if (bob_verbose) { \
+		printf(BOB_LOG_REGULAR "🔵 " BOB_LOG_SIGNATURE " " __VA_ARGS__); \
+	}
+
+#define BOB_FATAL(...) \
+	fprintf(stderr, BOB_LOG_RED "🔴 " BOB_LOG_SIGNATURE " " __VA_ARGS__);
+
+#define BOB_WARN(...) \
+	fprintf(stderr, BOB_LOG_YELLOW "🟡 " BOB_LOG_SIGNATURE " " __VA_ARGS__);
+
+#define BOB_SUCCESS(...) \
+	printf(BOB_LOG_GREEN "🟢 " BOB_LOG_SIGNATURE " " __VA_ARGS__);
+
+#define BOB_SANITY_CHECK(vessel) \
+	char* __bob_sanity_check_file = strdup(__FILE__); \
+	char* _bob_sanity_check_file = strrchr(__bob_sanity_check_file, '/'); /* get last component of filepath */ \
+	\
+	if (!_bob_sanity_check_file) { \
+		_bob_sanity_check_file = __bob_sanity_check_file; \
+	} \
+	\
+	*strrchr(++_bob_sanity_check_file, '.') = '\0'; /* remove extension */ \
+	\
+	if (!(vessel)->name || \
+		strcmp(_bob_sanity_check_file, (vessel)->name)) { \
+		\
+		BOB_WARN("Filename (%s) does not match vessel name (%s)\n", _bob_sanity_check_file, (vessel)->name) \
+	} \
+	\
+	free(__bob_sanity_check_file);
+
+typedef struct {
+	char* name;
+} bob_vessel_t;
+
+void bob_set_verbose(unsigned verbose);
+
+bob_vessel_t* bob_new_vessel(const char* name);
+void bob_del_vessel(bob_vessel_t* vessel);
+
+#endif

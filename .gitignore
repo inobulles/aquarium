@@ -1,5 +1,5 @@
 dist/
 out/
-src/
 rootfs/
 *.core
+bin/

@@ -3,3 +3,4 @@ out/
 rootfs/
 *.core
 bin/
+*.out

@@ -5,7 +5,7 @@ set -e
 
 # compile library
 
-cc -std=c99 -fPIC -c src/libbob.c -o bin/libbob.o -I src/
+cc -c src/libbob.c -Isrc -std=c99 -fPIC -o bin/libbob.o
 
 # create static library
 

@@ -1,6 +1,6 @@
 #include <bob.h>
 
-#define SOURCE "https://github.com/inobulles/aquabsd-core/release/download/"
+#define SOURCE "https://github.com/inobulles/aquabsd-core/releases/download/"
 #define VERSION "v1221a-beta"
 
 int main(void) {
@@ -15,8 +15,8 @@ int main(void) {
 
 	// install components
 
-	bob_vessel_net_component(vessel, SOURCE VERSION "/kernel.txz");
-	bob_vessel_net_component(vessel, SOURCE VERSION "/base.txz");
+	bob_vessel_net_component(vessel, "kernel", SOURCE VERSION "/kernel.txz");
+	bob_vessel_net_component(vessel, "base",   SOURCE VERSION "/base.txz");
 	// bob_vessel_local_component(vessel, "example.txz");
 
 	// // specfic configuration

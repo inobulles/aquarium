@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+// logging
+
 #define BOB_LOG_SIGNATURE "[BOB]"
 
 #define BOB_LOG_REGULAR "\033[0m"
@@ -43,6 +45,14 @@
 	} \
 	\
 	free(__bob_sanity_check_file);
+
+// other macros
+
+enum {
+	BOB_OS_AQUABSD,
+	BOB_OS_FREEBSD,
+	BOB_OS_SYSTEMD,
+} bob_os_t;
 
 typedef struct {
 	char* name;

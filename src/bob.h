@@ -57,6 +57,8 @@ typedef enum {
 typedef struct {
 	char* name;
 	bob_os_t os;
+
+	char* path;
 } bob_vessel_t;
 
 // global settings functions

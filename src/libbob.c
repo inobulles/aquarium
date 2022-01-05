@@ -512,7 +512,12 @@ error_mkdir_mount:
 	// detach memory disk
 	// don't really care about any errors here either
 
-	mdio.md_options &= ~MD_AUTOUNIT;
+	int unit = mdio.md_unit;
+
+	memset(&mdio, 0, sizeof mdio);
+
+	mdio.md_version = MDIOVERSION;
+	mdio.md_unit = unit;
 
 	if (ioctl(mdctl_fd, MDIOCDETACH, &mdio) < 0) {
 		BOB_WARN("Failed to detach memory disk (%s)\n", strerror(errno))

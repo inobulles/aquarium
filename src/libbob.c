@@ -192,7 +192,7 @@ error_open_out:
 
 int bob_vessel_component_extract(bob_vessel_t* vessel, const char* name) {
 	CHECK_VESSEL(vessel, -1)
-	BOB_INFO("Extracting component %s ...\n", name)
+	BOB_INFO("Extracting component (%s) ...\n", name)
 
 	int rv = -1;
 
@@ -417,7 +417,7 @@ int bob_vessel_gen_esp(bob_vessel_t* vessel, const char* oem, const char* label)
 	}
 
 	char* esp_dev_path = malloc(strlen(MD_NAME) + 64);
-	sprintf(esp_dev_path, MD_NAME "%d", mdio.md_unit);
+	sprintf(esp_dev_path, _PATH_DEV MD_NAME "%d", mdio.md_unit);
 
 	BOB_INFO("Created memory disk at %s\n", esp_dev_path)
 
@@ -490,27 +490,27 @@ int bob_vessel_gen_esp(bob_vessel_t* vessel, const char* oem, const char* label)
 	close(loader_efi);
 	close(bootx64);
 
-	// finally, we can unmount the ESP
-	// % umount $ESP_MOUNT
-
-	if (unmount(ESP_MOUNT, 0) < 0) {
-		BOB_FATAL("Failed to unmount ESP (%s)\n", strerror(errno))
-		goto error_umount;
-	}
-
 	// success
 
 	rv = 0;
 
-error_umount:
 error_boot_copy:
 error_efi_struct:
+
+	// unmount the ESP
+	// don't really care about any errors here
+
+	if (unmount(ESP_MOUNT, 0) < 0) {
+		BOB_WARN("Failed to unmount ESP (%s)\n", strerror(errno))
+	}
+
 error_mount_esp:
 error_mkdir_mount:
 
 	free(esp_dev_path);
 
-	// detach memory disk (don't really care about any errors here)
+	// detach memory disk
+	// don't really care about any errors here either
 
 	mdio.md_options &= ~MD_AUTOUNIT;
 

@@ -365,9 +365,9 @@ int bob_vessel_gen_esp(bob_vessel_t* vessel, const char* oem, const char* label)
 
 	// open a connection to /dev/mdctl
 
-	int fd = open(_PATH_DEV MDCTL_NAME, O_RDWR, 0);
+	int mdctl_fd = open(_PATH_DEV MDCTL_NAME, O_RDWR, 0);
 
-	if (fd < 0) {
+	if (mdctl_fd < 0) {
 		BOB_FATAL("Failed to open connection to " _PATH_DEV MDCTL_NAME " (%s)\n", strerror(errno))
 		goto error_mdctl;
 	}
@@ -382,7 +382,36 @@ int bob_vessel_gen_esp(bob_vessel_t* vessel, const char* oem, const char* label)
 		.md_options = MD_CLUSTER | MD_AUTOUNIT | MD_COMPRESS,
 	};
 
-	if (ioctl(fd, MDIOCATTACH, &mdio) < 0) {
+	// get absolute path of ESP image
+
+	mdio.md_file = realpath(ESP_IMG_PATH, NULL);
+
+	if (!mdio.md_file) {
+		BOB_FATAL("Failed to get absolute path for " ESP_IMG_PATH " (%s)\n", strerror(errno))
+		goto error_realpath;
+	}
+
+	// read size of image
+
+	int fd = open(mdio.md_file, O_RDONLY);
+
+	if (fd < 0) {
+		BOB_FATAL("Failed to open " ESP_IMG_PATH " (%s)\n", strerror(errno))
+		goto error_md_file_open;
+	}
+
+	struct stat sb;
+	
+	if (fstat(fd, &sb) < 0) {
+		BOB_FATAL("Failed to stat " ESP_IMG_PATH " (%s)\n", strerror(errno))
+		goto error_stat;
+	}
+
+	mdio.md_mediasize = sb.st_size;
+
+	// actually create memory disk
+
+	if (ioctl(mdctl_fd, MDIOCATTACH, &mdio) < 0) {
 		BOB_FATAL("Failed to attach memory disk (%s)\n", strerror(errno))
 		goto error_attach;
 	}
@@ -485,14 +514,23 @@ error_mkdir_mount:
 
 	mdio.md_options &= ~MD_AUTOUNIT;
 
-	if (ioctl(fd, MDIOCDETACH, &mdio) < 0) {
+	if (ioctl(mdctl_fd, MDIOCDETACH, &mdio) < 0) {
 		BOB_WARN("Failed to detach memory disk (%s)\n", strerror(errno))
 	}
 
 error_attach:
 
+	close(mdctl_fd);
+
+error_stat:
+
 	close(fd);
 
+error_md_file_open:
+
+	free(mdio.md_file);
+
+error_realpath:
 error_mdctl:
 error_geom_md:
 

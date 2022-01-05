@@ -86,4 +86,8 @@ int bob_vessel_component_extract(bob_vessel_t* vessel, const char* name);
 
 int bob_vessel_hostname(bob_vessel_t* vessel, const char* hostname);
 
+// image component creation functions
+
+int bob_vessel_gen_esp(bob_vessel_t* vessel, const char* oem, const char* label);
+
 #endif

@@ -9,13 +9,31 @@
 #include <fetch.h>
 #include <archive.h>
 
-#include <sys/stat.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <errno.h>
 
+#include <fcntl.h>
+
+#include <sys/stat.h>
+#include <sys/ioctl.h>
+#include <sys/uio.h>
+#include <sys/mount.h>
+
+#include <mkfs_msdos.h>
+// #include <mkfs_ufs.h>
+
+#include <libutil.h> // for kld_* stuff
+#include <paths.h>
+
+#include <sys/mdioctl.h>
+#include <copyfile.h>
+
 #define ROOTFS_PATH "rootfs"
 #define COMPONENT_PATH "components"
+
+#define ESP_IMG_PATH "esp.img"
+#define ESP_MOUNT "esp"
 
 #define CHECK_VESSEL(vessel, rv) \
 	if (!(vessel)) { \
@@ -64,12 +82,12 @@ bob_vessel_t* bob_new_vessel(const char* name) {
 		goto error;
 	}
 
-	if (mkdir(ROOTFS_PATH, 0700) < 0) {
+	if (mkdir(ROOTFS_PATH, 0700) < 0 && errno != EEXIST) {
 		BOB_FATAL("Failed to create rootfs subdirectory (%s)\n", strerror(errno))
 		goto error;
 	}
 
-	if (mkdir(COMPONENT_PATH, 0700) < 0) {
+	if (mkdir(COMPONENT_PATH, 0700) < 0 && errno != EEXIST) {
 		BOB_FATAL("Failed to create component subdirectory (%s)\n", strerror(errno))
 		goto error;
 	}
@@ -310,4 +328,189 @@ int bob_vessel_hostname(bob_vessel_t* vessel, const char* hostname) {
 	lut[BOB_SYS_FREEBSD] = freebsd_vessel_hostname;
 
 	return lut[vessel->sys](vessel, hostname);
+}
+
+// image component creation functions
+
+int bob_vessel_gen_esp(bob_vessel_t* vessel, const char* oem, const char* label) {
+	CHECK_VESSEL(vessel, -1)
+	BOB_INFO("Creating EFI system partition (%s) ...\n", label)
+	
+	int rv = -1;
+
+	char* esp_img_path = realpath(ESP_IMG_PATH, 0);
+
+	if (!esp_img_path) {
+		BOB_FATAL("Failed to find ESP image path (%s) (%s)\n", ESP_IMG_PATH, strerror(errno))
+		goto error_realpath;
+	}
+
+	// create FAT32 partition for the ESP
+	// % newfs_msdos -F 32 -c 1 $ESP_IMG_PATH
+
+	struct msdos_options options = {
+		.OEM_string = oem,
+		.volume_label = label,
+
+		.fat_type = 32,
+
+		.create_size = 33292 * 1024, // minimum FAT32 partition size
+		.sectors_per_cluster = 1,
+	};
+
+	if (mkfs_msdos(ESP_IMG_PATH, NULL, &options) < 0) {
+		BOB_FATAL("Failed to create FAT32 filesystem for ESP\n")
+		goto error_mkfs;
+	}
+
+	// make sure the geom_md kernel module is loaded
+
+	if (!kld_isloaded("g_md") && kld_load("geom_md") < 0) {
+		BOB_FATAL("Failed to load the geom_md kernel module\n")
+		goto error_geom_md;
+	}
+
+	// open a connection to /dev/mdctl
+
+	int fd = open(_PATH_DEV MDCTL_NAME, O_RDWR, 0);
+
+	if (fd < 0) {
+		BOB_FATAL("Failed to open connection to " _PATH_DEV MDCTL_NAME " (%s)\n", strerror(errno))
+		goto error_mdctl;
+	}
+
+	// create memory disk from that image
+	// % mdconfig -a -f $ESP_IMG_PATH
+
+	struct md_ioctl mdio = {
+		.md_version = MDIOVERSION,
+
+		.md_type = MD_VNODE,
+		.md_options = MD_CLUSTER | MD_AUTOUNIT | MD_COMPRESS,
+	};
+
+	if (ioctl(fd, MDIOCATTACH, &mdio) < 0) {
+		BOB_FATAL("Failed to attach memory disk (%s)\n", strerror(errno))
+		goto error_attach;
+	}
+
+	char* esp_dev_path = malloc(strlen(MD_NAME) + 64);
+	sprintf(esp_dev_path, MD_NAME "%d", mdio.md_unit);
+
+	BOB_INFO("Created memory disk at %s\n", esp_dev_path)
+
+	// mount ESP
+	// % mkdir -p $ESP_MOUNT
+	// % mount -t msdosfs -o longnames $ESP_IMG_PATH $ESP_MOUNT
+
+	if (mkdir(ESP_MOUNT, 0700) < 0 && errno != EEXIST) {
+		BOB_FATAL("Failed to create ESP mountpoint at %s (%s)", ESP_MOUNT, strerror(errno))
+		goto error_mkdir_mount;
+	}
+
+	#define IOV(name, val) \
+		(struct iovec) { .iov_base = (name), .iov_len = strlen((name)) + 1 }, \
+		(struct iovec) { .iov_base = (val ), .iov_len = strlen((val )) + 1 }
+
+	struct iovec iov[] = {
+		IOV("fstype", "msdosfs"),
+		IOV("fspath", ESP_MOUNT),
+		IOV("from", esp_dev_path),
+		IOV("longnames", ""),
+	};
+
+	if (nmount(iov, sizeof(iov) / sizeof(*iov), 0) < 0) {
+		BOB_FATAL("Failed to mount ESP (from %s to %s) (%s)\n", esp_dev_path, ESP_MOUNT, strerror(errno))
+		goto error_mount_esp;
+	}
+
+	// create EFI directory structure
+	// % mkdir -p $ESP_MOUNT/EFI/BOOT
+
+	if (mkdir(ESP_MOUNT "/EFI", 0700) < 0 && errno != EEXIST) {
+		BOB_FATAL("Failed to create EFI directory structure (%s)\n", strerror(errno))
+		goto error_efi_struct;
+	}
+
+	if (mkdir(ESP_MOUNT "/EFI/BOOT", 0700) < 0 && errno != EEXIST) {
+		BOB_FATAL("Failed to create EFI directory structure (%s)\n", strerror(errno))
+		goto error_efi_struct;
+	}
+
+	// copy over boot code
+	// % cp $ROOTFS_PATH/boot/loader.efi $ESP_MOUNT/EFI/BOOT/BOOTX64.efi
+
+	int loader_efi = open(ROOTFS_PATH "/boot/loader.efi", O_RDONLY);
+
+	if (loader_efi < 0) {
+		BOB_FATAL("Failed to open boot code at /boot/loader.efi (%s)\n", strerror(errno))
+		goto error_boot_copy;
+	}
+
+	int bootx64 = creat(ESP_MOUNT "/EFI/BOOT/BOOTX64.efi", 0660);
+
+	if (bootx64 < 0) {
+		BOB_FATAL("Failed to create /EFI/BOOT/BOOTX64.efi on ESP partition (%s)\n", strerror(errno))
+		
+		close(loader_efi);
+		goto error_boot_copy;
+	}
+
+	if (fcopyfile(loader_efi, bootx64, 0, COPYFILE_ALL) < 0) {
+		BOB_FATAL("Failed to copy boot code (%s)\n", strerror(errno))
+		
+		close(loader_efi);
+		close(bootx64);
+
+		goto error_boot_copy;
+	}
+
+	close(loader_efi);
+	close(bootx64);
+
+	// finally, we can unmount the ESP
+	// % umount $ESP_MOUNT
+
+	if (unmount(ESP_MOUNT, 0) < 0) {
+		BOB_FATAL("Failed to unmount ESP (%s)\n", strerror(errno))
+		goto error_umount;
+	}
+
+	// success
+
+	rv = 0;
+
+error_umount:
+error_boot_copy:
+error_efi_struct:
+error_mount_esp:
+error_mkdir_mount:
+
+	free(esp_dev_path);
+
+	// detach memory disk (don't really care about any errors here)
+
+	mdio.md_options &= ~MD_AUTOUNIT;
+
+	if (ioctl(fd, MDIOCDETACH, &mdio) < 0) {
+		BOB_WARN("Failed to detach memory disk (%s)\n", strerror(errno))
+	}
+
+error_attach:
+
+	close(fd);
+
+error_mdctl:
+error_geom_md:
+
+	// should technically be removing the ESP image file on error,
+	// but the whole vessel build directory will be deleted anyway so 🤷
+
+error_mkfs:
+
+	free(esp_img_path);
+
+error_realpath:
+
+	return rv;
 }

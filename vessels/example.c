@@ -9,6 +9,8 @@ int main(void) {
 	bob_vessel_t* vessel = bob_new_vessel("aquabsd-example");
 	BOB_SANITY_CHECK(vessel)
 
+	setprogname(vessel->name);
+
 	// options
 
 	bob_vessel_sys(vessel, BOB_SYS_FREEBSD);
@@ -16,11 +18,11 @@ int main(void) {
 	// install components
 
 	bob_vessel_net_component(vessel, "kernel", SOURCE VERSION "/kernel.txz");
-	bob_vessel_net_component(vessel, "base",   SOURCE VERSION "/base.txz");
-	bob_vessel_local_component(vessel, "example.txz");
+	// bob_vessel_net_component(vessel, "base",   SOURCE VERSION "/base.txz");
+	// bob_vessel_local_component(vessel, "example.txz");
 
 	bob_vessel_component_extract(vessel, "kernel");
-	bob_vessel_component_extract(vessel, "base");
+	// bob_vessel_component_extract(vessel, "base");
 
 	// specfic configuration
 

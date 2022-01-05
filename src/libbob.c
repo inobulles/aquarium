@@ -338,15 +338,8 @@ int bob_vessel_gen_esp(bob_vessel_t* vessel, const char* oem, const char* label)
 	
 	int rv = -1;
 
-	char* esp_img_path = realpath(ESP_IMG_PATH, 0);
-
-	if (!esp_img_path) {
-		BOB_FATAL("Failed to find ESP image path (%s) (%s)\n", ESP_IMG_PATH, strerror(errno))
-		goto error_realpath;
-	}
-
 	// create FAT32 partition for the ESP
-	// % newfs_msdos -F 32 -c 1 $ESP_IMG_PATH
+	// % newfs_msdos -F 32 -c 1 $esp_img_path
 
 	struct msdos_options options = {
 		.OEM_string = oem,
@@ -507,10 +500,6 @@ error_geom_md:
 	// but the whole vessel build directory will be deleted anyway so 🤷
 
 error_mkfs:
-
-	free(esp_img_path);
-
-error_realpath:
 
 	return rv;
 }

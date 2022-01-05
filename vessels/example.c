@@ -11,29 +11,29 @@ int main(void) {
 
 	// options
 
-	bob_vessel_os(vessel, BOB_OS_FREEBSD);
+	bob_vessel_sys(vessel, BOB_SYS_FREEBSD);
 
 	// install components
 
 	bob_vessel_net_component(vessel, "kernel", SOURCE VERSION "/kernel.txz");
 	bob_vessel_net_component(vessel, "base",   SOURCE VERSION "/base.txz");
-	// bob_vessel_local_component(vessel, "example.txz");
+	bob_vessel_local_component(vessel, "example.txz");
 
 	bob_vessel_component_extract(vessel, "kernel");
 	bob_vessel_component_extract(vessel, "base");
 
-	// // specfic configuration
+	// specfic configuration
 
-	// bob_vessel_hostname(vessel, vessel->name);
+	bob_vessel_hostname(vessel, vessel->name);
 	// bob_vessel_pkg(vessel, "vim");
 
-	// // create image components
+	// create image components
 
-	// bob_vessel_gen_fs(vessel, vessel->name);
-	// bob_vessel_gen_esp(vessel, "AQUABSD ", "AQUABSD-EFI");
+	bob_vessel_gen_fs(vessel, vessel->name);
+	bob_vessel_gen_esp(vessel, "AQUABSD ", "AQUABSD-EFI");
 
-	// char* path = bob_vessel_assemble(vessel);
-	// BOB_INFO("Final assembled image outputted at %s\n", path)
+	char* path = bob_vessel_assemble(vessel);
+	BOB_INFO("Final assembled image outputted at %s\n", path)
 
 	bob_del_vessel(vessel);
 

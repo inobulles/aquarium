@@ -49,14 +49,16 @@
 // other macros
 
 typedef enum {
-	BOB_OS_AQUABSD,
-	BOB_OS_FREEBSD,
-	BOB_OS_SYSTEMD,
-} bob_os_t;
+	BOB_SYS_AQUABSD,
+	BOB_SYS_FREEBSD,
+	BOB_SYS_SYSTEMD,
+
+	BOB_SYS_LEN
+} bob_sys_t;
 
 typedef struct {
 	char* name;
-	bob_os_t os;
+	bob_sys_t sys;
 
 	char* path;
 } bob_vessel_t;
@@ -73,11 +75,15 @@ void bob_del_vessel(bob_vessel_t* vessel);
 
 // vessel settings functions
 
-void bob_vessel_os(bob_vessel_t* vessel, bob_os_t os);
+int bob_vessel_sys(bob_vessel_t* vessel, bob_sys_t sys);
 
 // vessel component functions
 
 int bob_vessel_net_component(bob_vessel_t* vessel, const char* name, const char* url);
 int bob_vessel_component_extract(bob_vessel_t* vessel, const char* name);
+
+// vessel configuration functions
+
+int bob_vessel_hostname(bob_vessel_t* vessel, const char* hostname);
 
 #endif

@@ -17,10 +17,10 @@
 #define ROOTFS_PATH "rootfs"
 #define COMPONENT_PATH "components"
 
-#define CHECK_VESSEL(vessel) \
+#define CHECK_VESSEL(vessel, rv) \
 	if (!(vessel)) { \
-		BOB_WARN("Attempting to delete a non-existant vessel\n") \
-		return; \
+		BOB_WARN("Using %s on a non-existant vessel\n", __func__) \
+		return rv; \
 	}
 
 // global settings functions
@@ -45,7 +45,9 @@ bob_vessel_t* bob_new_vessel(const char* name) {
 	int rv = -1;
 
 	bob_vessel_t* vessel = calloc(1, sizeof *vessel);
+
 	vessel->name = strdup(name);
+	vessel->sys = BOB_SYS_AQUABSD;
 
 	char _path[] = "/tmp/bob-vessel-XXXXXXX";
 	char* path = mkdtemp(_path);
@@ -87,7 +89,7 @@ error:
 }
 
 void bob_del_vessel(bob_vessel_t* vessel) {
-	CHECK_VESSEL(vessel)
+	CHECK_VESSEL(vessel, )
 	
 	if (vessel->name) {
 		BOB_INFO("Deleting vessel (%s) ...\n", vessel->name)
@@ -105,15 +107,22 @@ void bob_del_vessel(bob_vessel_t* vessel) {
 
 // vessel settings functions
 
-void bob_vessel_os(bob_vessel_t* vessel, bob_os_t os) {
-	CHECK_VESSEL(vessel)
+int bob_vessel_sys(bob_vessel_t* vessel, bob_sys_t sys) {
+	CHECK_VESSEL(vessel, -1)
 
-	vessel->os = os;
+	if ((unsigned) sys >= BOB_SYS_LEN) {
+		BOB_WARN("Unknown system %d\n", sys)
+		return -1;
+	}
+
+	vessel->sys = sys;
+	return 0;
 }
 
 // vessel component functions
 
 int bob_vessel_net_component(bob_vessel_t* vessel, const char* name, const char* url) {
+	CHECK_VESSEL(vessel, -1)
 	BOB_INFO("Downloading net component (%s) ...\n", name)
 
 	int rv = -1;
@@ -164,9 +173,10 @@ error_open_out:
 }
 
 int bob_vessel_component_extract(bob_vessel_t* vessel, const char* name) {
-	int rv = -1;
-
+	CHECK_VESSEL(vessel, -1)
 	BOB_INFO("Extracting component %s ...\n", name)
+
+	int rv = -1;
 
 	// "chroot" (really just changing directories) to the final root
 	// don't forget to go back to the vessel's build directory, so 'bob_vessel_component_extract' is atomic
@@ -201,8 +211,8 @@ int bob_vessel_component_extract(bob_vessel_t* vessel, const char* name) {
 		int res = archive_read_next_header(archive, &entry);
 
 		if (res == ARCHIVE_OK) {
-			// when multithreading, the 'ARCHIVE_EXTRACT_ACL' flag results in a bus error
-			// it would seem as though there is a bug in 'libarchive', but unfortunately I have not yet had the time to resolve it
+			// TODO when multithreading, the 'ARCHIVE_EXTRACT_ACL' flag results in a bus error
+			//      it would seem as though there is a bug in 'libarchive', but unfortunately I have not yet had the time to resolve it
 
 			res = archive_read_extract(archive, entry, ARCHIVE_EXTRACT_TIME | ARCHIVE_EXTRACT_OWNER | ARCHIVE_EXTRACT_PERM | /*ARCHIVE_EXTRACT_ACL |*/ ARCHIVE_EXTRACT_XATTR | ARCHIVE_EXTRACT_FFLAGS);
 		}
@@ -240,4 +250,64 @@ error_read:
 error_chdir:
 
 	return rv;
+}
+
+// vessel configuration functions
+
+static int file_append(const char* path, const void* data, size_t len) {
+	int rv = -1;
+
+	FILE* fp = fopen(path, "a");
+
+	if (!fp) {
+		BOB_FATAL("Failed to open %s (%s)\n", path, strerror(errno))
+		goto error_fopen;
+	}
+
+	fwrite(data, len, 1, fp);
+
+	// success
+
+	rv = 0;
+
+	fclose(fp);
+
+error_fopen:
+
+	return rv;
+}
+
+static int file_append_str(const char* path, const char* str) {
+	return file_append(path, str, strlen(str));
+}
+
+static int dummy_vessel_hostname(bob_vessel_t* vessel, const char* hostname) {
+	BOB_FATAL("Setting hostname for system %d vessels is currently unsupported\n", vessel->sys)
+	return -1;
+}
+
+static int freebsd_vessel_hostname(bob_vessel_t* vessel, const char* hostname) {
+	char* ent = malloc(strlen(hostname) + 64);
+	sprintf(ent, "hostname=%s\n", hostname);
+
+	int rv = file_append_str(ROOTFS_PATH "/etc/rc.conf", ent);
+
+	free(ent);
+
+	return rv;
+}
+
+int bob_vessel_hostname(bob_vessel_t* vessel, const char* hostname) {
+	CHECK_VESSEL(vessel, -1)
+	BOB_INFO("Setting hostname to %s ...\n", hostname)
+
+	int (*lut[BOB_SYS_LEN]) (bob_vessel_t* vessel, const char* hostname);
+
+	for (int i = 0; i < sizeof(lut) / sizeof(*lut); i++) {
+		lut[i] = dummy_vessel_hostname;
+	}
+
+	lut[BOB_SYS_FREEBSD] = freebsd_vessel_hostname;
+
+	return lut[vessel->sys](vessel, hostname);
 }

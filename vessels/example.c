@@ -31,7 +31,7 @@ int main(void) {
 
 	// create image components
 
-	// bob_vessel_gen_fs(vessel, vessel->name);
+	bob_vessel_gen_fs(vessel, vessel->name);
 	bob_vessel_gen_esp(vessel, "AQUABSD ", "AQUABSD-EFI");
 
 	// char* path = bob_vessel_assemble(vessel);

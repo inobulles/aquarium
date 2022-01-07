@@ -321,6 +321,8 @@ int bob_vessel_hostname(bob_vessel_t* vessel, const char* hostname) {
 
 	int (*lut[BOB_SYS_LEN]) (bob_vessel_t* vessel, const char* hostname);
 
+	// clear LUT entries
+
 	for (int i = 0; i < sizeof(lut) / sizeof(*lut); i++) {
 		lut[i] = dummy_vessel_hostname;
 	}
@@ -331,6 +333,39 @@ int bob_vessel_hostname(bob_vessel_t* vessel, const char* hostname) {
 }
 
 // image component creation functions
+
+static int dummy_vessel_gen_fs(bob_vessel_t* vessel, const char* label) {
+	BOB_FATAL("Generating filesystem for system %d vessels is currently unsupported\n", vessel->sys);
+	return -1;
+}
+
+static int aquabsd_vessel_gen_fs(bob_vessel_t* vessel, const char* label) {
+	return -1;
+}
+
+static int freebsd_vessel_gen_fs(bob_vessel_t* vessel, const char* label) {
+	// literally just a wrapper around aquabsd_vessel_gen_fs
+	
+	return aquabsd_vessel_gen_fs(vessel, label);
+}
+
+int bob_vessel_gen_fs(bob_vessel_t* vessel, const char* label) {
+	CHECK_VESSEL(vessel, -1)
+	BOB_INFO("Creating filsystem partition (%s) ...\n", label)
+
+	int (*lut[BOB_SYS_LEN]) (bob_vessel_t* vessel, const char* label);
+
+	// clear LUT entries
+
+	for (int i = 0; i < sizeof(lut) / sizeof(*lut); i++) {
+		lut[i] = dummy_vessel_gen_fs;
+	}
+
+	lut[BOB_SYS_AQUABSD] = aquabsd_vessel_gen_fs;
+	lut[BOB_SYS_FREEBSD] = freebsd_vessel_gen_fs;
+
+	return lut[vessel->sys](vessel, label);
+}
 
 int bob_vessel_gen_esp(bob_vessel_t* vessel, const char* oem, const char* label) {
 	CHECK_VESSEL(vessel, -1)

@@ -20,6 +20,8 @@
 #include <sys/uio.h>
 #include <sys/mount.h>
 
+// TODO replace these very aquaBSD-specific (and frankly dirty) libraries with something a bit more generic
+
 #include <mkfs_msdos.h>
 // #include <mkfs_ufs.h>
 
@@ -34,6 +36,8 @@
 
 #define ESP_IMG_PATH "esp.img"
 #define ESP_MOUNT "esp"
+
+#define FS_IMG_PATH "fs.img"
 
 #define CHECK_VESSEL(vessel, rv) \
 	if (!(vessel)) { \
@@ -340,12 +344,36 @@ static int dummy_vessel_gen_fs(bob_vessel_t* vessel, const char* label) {
 }
 
 static int aquabsd_vessel_gen_fs(bob_vessel_t* vessel, const char* label) {
+	// TODO this is actually quite a bit more involved than I would have hoped 😅
+	//      basically what imma need to do is create some kind of unified interface for creating file system partitions and populating them
+	//      this will be done through some kind of libmkfs library, similar to libmkfs_msdos currently
+	//      this library will be based off of makefs (aquabsd-core/usr.sbin/makefs), which is a program ported over from NetBSD
+	//      makefs is a bit tricky to build out of tree (because of dependencies on sources from mtree, libnetbsd, &c), so I'll probably build libmkfs right into aquaBSD core when I get around to that
+	//      this is a bit unfortunate because it means this program will only really work to build full vessel images on aquaBSD, & not on FreeBSD
+	//      oh well
+	//      in any case, when I do implement libmkfs, I'll be able to
+	//       - write it in a much cleaner, potentially modular way
+	//       - deprecate libmkfs_msdos & libmkfs_ufs
+	//       - deprecate the newfs & newfs_msdos utilities in aquaBSD core
+	//       - rewrite makefs to basically just be a frontend for libmkfs (perhaps I can even change the name to just mkfs, similar to the Linux FS creation tools (mkfs.*) to emphasize this change?)
+	//      so, for the meantime, this is just an ugly call to 'system'
+	//      (to clarify, I can't use libmkfs_ufs, because I must decide the size of my partition first)
+	
+	char* cmd = malloc(strlen(label) + strlen(FS_IMG_PATH) + strlen(ROOTFS_PATH) + 64);
+	sprintf(cmd, "makefs -B little -o label=%s " FS_IMG_PATH " " ROOTFS_PATH, label);
+
+	BOB_WARN("%s is not really super well implemented just yet (cf. the long-ass comment at the beginning of the function in " __FILE__ ")\n", __func__)
+	BOB_WARN("Executing command: %s\n", cmd)
+
+	system(cmd);
+	free(cmd);
+	
 	return -1;
 }
 
 static int freebsd_vessel_gen_fs(bob_vessel_t* vessel, const char* label) {
 	// literally just a wrapper around aquabsd_vessel_gen_fs
-	
+
 	return aquabsd_vessel_gen_fs(vessel, label);
 }
 

@@ -34,8 +34,8 @@ int main(void) {
 	bob_vessel_gen_fs(vessel, vessel->name);
 	bob_vessel_gen_esp(vessel, "AQUABSD ", "AQUABSD-EFI");
 
-	// char* path = bob_vessel_assemble(vessel);
-	// BOB_INFO("Final assembled image outputted at %s\n", path)
+	bob_vessel_assemble(vessel);
+	BOB_INFO("Final assembled image outputted at %s\n", vessel->assembled_path)
 
 	bob_del_vessel(vessel);
 

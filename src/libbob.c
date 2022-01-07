@@ -39,6 +39,8 @@
 
 #define FS_IMG_PATH "fs.img"
 
+#define ASSEMBLED_IMG_PATH "assembled.img"
+
 #define CHECK_VESSEL(vessel, rv) \
 	if (!(vessel)) { \
 		BOB_WARN("Using %s on a non-existant vessel\n", __func__) \
@@ -47,7 +49,7 @@
 
 // global settings functions
 
-static unsigned bob_verbose = 0;
+unsigned bob_verbose = 0;
 
 void bob_set_verbose(unsigned verbose) {
 	bob_verbose = verbose;
@@ -344,6 +346,8 @@ static int dummy_vessel_gen_fs(bob_vessel_t* vessel, const char* label) {
 }
 
 static int aquabsd_vessel_gen_fs(bob_vessel_t* vessel, const char* label) {
+	BOB_WARN("%s is not really super well implemented just yet (cf. the long-ass comment at the beginning of the function in " __FILE__ ")\n", __func__)
+
 	// TODO this is actually quite a bit more involved than I would have hoped 😅
 	//      basically what imma need to do is create some kind of unified interface for creating file system partitions and populating them
 	//      this will be done through some kind of libmkfs library, similar to libmkfs_msdos currently
@@ -356,19 +360,19 @@ static int aquabsd_vessel_gen_fs(bob_vessel_t* vessel, const char* label) {
 	//       - deprecate libmkfs_msdos & libmkfs_ufs
 	//       - deprecate the newfs & newfs_msdos utilities in aquaBSD core
 	//       - rewrite makefs to basically just be a frontend for libmkfs (perhaps I can even change the name to just mkfs, similar to the Linux FS creation tools (mkfs.*) to emphasize this change?)
+	//       - could probably move makefs to /usr/bin, so that you don't need to be a SU to simply create image files from folders
 	//      so, for the meantime, this is just an ugly call to 'system'
 	//      (to clarify, I can't use libmkfs_ufs, because I must decide the size of my partition first)
-	
+
 	char* cmd = malloc(strlen(label) + strlen(FS_IMG_PATH) + strlen(ROOTFS_PATH) + 64);
 	sprintf(cmd, "makefs -B little -o label=%s " FS_IMG_PATH " " ROOTFS_PATH, label);
 
-	BOB_WARN("%s is not really super well implemented just yet (cf. the long-ass comment at the beginning of the function in " __FILE__ ")\n", __func__)
 	BOB_WARN("Executing command: %s\n", cmd)
 
-	system(cmd);
+	int rv = system(cmd);
 	free(cmd);
 	
-	return -1;
+	return rv;
 }
 
 static int freebsd_vessel_gen_fs(bob_vessel_t* vessel, const char* label) {
@@ -608,4 +612,57 @@ error_geom_md:
 error_mkfs:
 
 	return rv;
+}
+
+static int dummy_vessel_assemble(bob_vessel_t* vessel) {
+	BOB_FATAL("Assembling system %d vessels is currently unsupported\n", vessel->sys);
+	return -1;
+}
+
+static int aquabsd_vessel_assemble(bob_vessel_t* vessel) {
+	BOB_WARN("%s is not really super well implemented just yet (cf. the long-ass comment at the beginning of the function in " __FILE__ ")\n", __func__)
+
+	// TODO similar story to aquabsd_vessel_gen_fs; create a libmkimg library to replace this shit
+	//      this is even worse than that lol 💩
+	// TODO also abandon MBR completely in favour of GPT pretty please - there's no reason the installer should be installing GPT but using MBR!
+
+	char* cmd = malloc(strlen(ROOTFS_PATH) * 2 + strlen(ESP_IMG_PATH) + strlen(FS_IMG_PATH) + strlen(ASSEMBLED_IMG_PATH) + 128);
+	sprintf(cmd, "mkimg -s mbr -b %s/boot/mbr -p efi:=%s -p freebsd:-\"mkimg -s bsd -b %s/boot/boot -p freebsd-ufs:=%s\" -a 2 -o %s", ROOTFS_PATH, ESP_IMG_PATH, ROOTFS_PATH, FS_IMG_PATH, ASSEMBLED_IMG_PATH);
+
+	BOB_WARN("Executing command: %s\n", cmd)
+
+	int rv = system(cmd);
+
+	vessel->assembled_path = realpath(ASSEMBLED_IMG_PATH, NULL);
+
+	if (!vessel->assembled_path) {
+		BOB_FATAL("Failed to find assembled image file (%s) (%s)\n", ASSEMBLED_IMG_PATH, strerror(errno))
+		rv = -1;
+	}
+
+	return rv;
+}
+
+static int freebsd_vessel_assemble(bob_vessel_t* vessel) {
+	// literally just a wrapper around aquabsd_vessel_assemble
+
+	return aquabsd_vessel_assemble(vessel);
+}
+
+int bob_vessel_assemble(bob_vessel_t* vessel) {
+	CHECK_VESSEL(vessel, -1)
+	BOB_INFO("Assembling image file ...\n")
+
+	int (*lut[BOB_SYS_LEN]) (bob_vessel_t* vessel);
+
+	// clear LUT entries
+
+	for (int i = 0; i < sizeof(lut) / sizeof(*lut); i++) {
+		lut[i] = dummy_vessel_assemble;
+	}
+
+	lut[BOB_SYS_AQUABSD] = aquabsd_vessel_assemble;
+	lut[BOB_SYS_FREEBSD] = freebsd_vessel_assemble;
+
+	return lut[vessel->sys](vessel);
 }

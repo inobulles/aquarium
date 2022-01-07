@@ -14,6 +14,8 @@
 #define BOB_LOG_GREEN   "\033[0;32m"
 #define BOB_LOG_YELLOW  "\033[0;33m"
 
+extern unsigned bob_verbose;
+
 #define BOB_INFO(...) \
 	if (bob_verbose) { \
 		printf(BOB_LOG_REGULAR "🔵 " BOB_LOG_SIGNATURE " " __VA_ARGS__); \
@@ -61,6 +63,8 @@ typedef struct {
 	bob_sys_t sys;
 
 	char* path;
+
+	char* assembled_path;
 } bob_vessel_t;
 
 // global settings functions
@@ -90,5 +94,7 @@ int bob_vessel_hostname(bob_vessel_t* vessel, const char* hostname);
 
 int bob_vessel_gen_fs(bob_vessel_t* vessel, const char* label);
 int bob_vessel_gen_esp(bob_vessel_t* vessel, const char* oem, const char* label);
+
+int bob_vessel_assemble(bob_vessel_t* vessel);
 
 #endif

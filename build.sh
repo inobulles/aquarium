@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-# TODO remove redundant entries in `.gitignore`
+mkdir -p bin
 
 # compile library
 

@@ -121,10 +121,21 @@ void bob_del_aquarium(bob_aquarium_t* aquarium) {
 	}
 
 	if (aquarium->path) {
-		if (rmdir(aquarium->path) < 0) {
+		// TODO something similar to libcopyfile (should these be combined into a general libfsutils library or something?)
+		//      this is currently really very super bad 😬
+
+		char* cmd;
+
+		asprintf(&cmd, "read _ && rm -rf \"%s\"", aquarium->path);
+		BOB_WARN("Going to run the following command: %s\n", cmd);
+
+		if (system(cmd)) {
+			free(cmd);
+			
 			BOB_FATAL("Failed to delete aquarium directory (%s) (%s)\n", aquarium->path, strerror(errno))
 		}
 
+		free(cmd);
 		free(aquarium->path);
 	}
 }

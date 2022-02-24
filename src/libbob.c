@@ -41,9 +41,9 @@
 
 #define ASSEMBLED_IMG_PATH "assembled.img"
 
-#define CHECK_VESSEL(vessel, rv) \
-	if (!(vessel)) { \
-		BOB_WARN("Using %s on a non-existant vessel\n", __func__) \
+#define CHECK_AQUARIUM(aquarium, rv) \
+	if (!(aquarium)) { \
+		BOB_WARN("Using %s on a non-existant aquarium\n", __func__) \
 		return rv; \
 	}
 
@@ -61,30 +61,30 @@ void bob_set_chunk_bytes(unsigned chunk_bytes) {
 	bob_chunk_bytes = chunk_bytes;
 }
 
-// vessel creation/destruction functions
+// aquarium creation/destruction functions
 
-bob_vessel_t* bob_new_vessel(const char* name) {
-	BOB_INFO("Creating a new vessel (%s) ...\n", name)
+bob_aquarium_t* bob_new_aquarium(const char* name) {
+	BOB_INFO("Creating a new aquarium (%s) ...\n", name)
 
 	int rv = -1;
 
-	bob_vessel_t* vessel = calloc(1, sizeof *vessel);
+	bob_aquarium_t* aquarium = calloc(1, sizeof *aquarium);
 
-	vessel->name = strdup(name);
-	vessel->sys = BOB_SYS_AQUABSD;
+	aquarium->name = strdup(name);
+	aquarium->sys = BOB_SYS_AQUABSD;
 
-	char _path[] = "/tmp/bob-vessel-XXXXXXX";
+	char _path[] = "/tmp/bob-aquarium-XXXXXXX";
 	char* path = mkdtemp(_path);
 
 	if (!path) {
-		BOB_FATAL("Failed to create build directory for vessel\n")
+		BOB_FATAL("Failed to create build directory for aquarium\n")
 		goto error;
 	}
 
-	vessel->path = strdup(path);
+	aquarium->path = strdup(path);
 
-	if (chdir(vessel->path) < 0) {
-		BOB_FATAL("Failed to enter vessel build directory (%s) (%s)\n", vessel->path, strerror(errno))
+	if (chdir(aquarium->path) < 0) {
+		BOB_FATAL("Failed to enter aquarium build directory (%s) (%s)\n", aquarium->path, strerror(errno))
 		goto error;
 	}
 
@@ -104,49 +104,49 @@ bob_vessel_t* bob_new_vessel(const char* name) {
 
 done:
 
-	return vessel;
+	return aquarium;
 
 error:
 
-	bob_del_vessel(vessel);
+	bob_del_aquarium(aquarium);
 	goto done;
 }
 
-void bob_del_vessel(bob_vessel_t* vessel) {
-	CHECK_VESSEL(vessel, )
+void bob_del_aquarium(bob_aquarium_t* aquarium) {
+	CHECK_AQUARIUM(aquarium, )
 	
-	if (vessel->name) {
-		BOB_INFO("Deleting vessel (%s) ...\n", vessel->name)
-		free(vessel->name);
+	if (aquarium->name) {
+		BOB_INFO("Deleting aquarium (%s) ...\n", aquarium->name)
+		free(aquarium->name);
 	}
 
-	if (vessel->path) {
-		if (rmdir(vessel->path) < 0) {
-			BOB_FATAL("Failed to delete vessel directory (%s) (%s)\n", vessel->path, strerror(errno))
+	if (aquarium->path) {
+		if (rmdir(aquarium->path) < 0) {
+			BOB_FATAL("Failed to delete aquarium directory (%s) (%s)\n", aquarium->path, strerror(errno))
 		}
 
-		free(vessel->path);
+		free(aquarium->path);
 	}
 }
 
-// vessel settings functions
+// aquarium settings functions
 
-int bob_vessel_sys(bob_vessel_t* vessel, bob_sys_t sys) {
-	CHECK_VESSEL(vessel, -1)
+int bob_aquarium_sys(bob_aquarium_t* aquarium, bob_sys_t sys) {
+	CHECK_AQUARIUM(aquarium, -1)
 
 	if ((unsigned) sys >= BOB_SYS_LEN) {
 		BOB_WARN("Unknown system %d\n", sys)
 		return -1;
 	}
 
-	vessel->sys = sys;
+	aquarium->sys = sys;
 	return 0;
 }
 
-// vessel component functions
+// aquarium component functions
 
-int bob_vessel_net_component(bob_vessel_t* vessel, const char* name, const char* url) {
-	CHECK_VESSEL(vessel, -1)
+int bob_aquarium_net_component(bob_aquarium_t* aquarium, const char* name, const char* url) {
+	CHECK_AQUARIUM(aquarium, -1)
 	BOB_INFO("Downloading net component (%s) ...\n", name)
 
 	int rv = -1;
@@ -196,14 +196,14 @@ error_open_out:
 	return rv;
 }
 
-int bob_vessel_component_extract(bob_vessel_t* vessel, const char* name) {
-	CHECK_VESSEL(vessel, -1)
+int bob_aquarium_component_extract(bob_aquarium_t* aquarium, const char* name) {
+	CHECK_AQUARIUM(aquarium, -1)
 	BOB_INFO("Extracting component (%s) ...\n", name)
 
 	int rv = -1;
 
 	// "chroot" (really just changing directories) to the final root
-	// don't forget to go back to the vessel's build directory, so 'bob_vessel_component_extract' is atomic
+	// don't forget to go back to the aquarium's build directory, so 'bob_aquarium_component_extract' is atomic
 	// as per archive_write_disk(3)'s "BUGS" section, we mustn't call 'chdir' between opening and closing archive objects
 
 	if (chdir(ROOTFS_PATH) < 0) {
@@ -264,10 +264,10 @@ error_read:
 	archive_read_close(archive);
 	archive_read_free(archive);
 
-	// don't forget to change back to vessel build directory!
+	// don't forget to change back to aquarium build directory!
 
 	if (chdir("..") < 0) {
-		BOB_FATAL("Failed to change back into vessel build directory after component extraction (%s)\n", strerror(errno))
+		BOB_FATAL("Failed to change back into aquarium build directory after component extraction (%s)\n", strerror(errno))
 		rv = -1;
 	}
 
@@ -276,7 +276,7 @@ error_chdir:
 	return rv;
 }
 
-// vessel configuration functions
+// aquarium configuration functions
 
 static int file_append(const char* path, const void* data, size_t len) {
 	int rv = -1;
@@ -305,12 +305,12 @@ static int file_append_str(const char* path, const char* str) {
 	return file_append(path, str, strlen(str));
 }
 
-static int dummy_vessel_hostname(bob_vessel_t* vessel, const char* hostname) {
-	BOB_FATAL("Setting hostname for system %d vessels is currently unsupported\n", vessel->sys)
+static int dummy_aquarium_hostname(bob_aquarium_t* aquarium, const char* hostname) {
+	BOB_FATAL("Setting hostname for system %d aquariums is currently unsupported\n", aquarium->sys)
 	return -1;
 }
 
-static int freebsd_vessel_hostname(bob_vessel_t* vessel, const char* hostname) {
+static int freebsd_aquarium_hostname(bob_aquarium_t* aquarium, const char* hostname) {
 	char* ent = malloc(strlen(hostname) + 64);
 	sprintf(ent, "hostname=%s\n", hostname);
 
@@ -321,31 +321,31 @@ static int freebsd_vessel_hostname(bob_vessel_t* vessel, const char* hostname) {
 	return rv;
 }
 
-int bob_vessel_hostname(bob_vessel_t* vessel, const char* hostname) {
-	CHECK_VESSEL(vessel, -1)
+int bob_aquarium_hostname(bob_aquarium_t* aquarium, const char* hostname) {
+	CHECK_AQUARIUM(aquarium, -1)
 	BOB_INFO("Setting hostname to %s ...\n", hostname)
 
-	int (*lut[BOB_SYS_LEN]) (bob_vessel_t* vessel, const char* hostname);
+	int (*lut[BOB_SYS_LEN]) (bob_aquarium_t* aquarium, const char* hostname);
 
 	// clear LUT entries
 
 	for (int i = 0; i < sizeof(lut) / sizeof(*lut); i++) {
-		lut[i] = dummy_vessel_hostname;
+		lut[i] = dummy_aquarium_hostname;
 	}
 
-	lut[BOB_SYS_FREEBSD] = freebsd_vessel_hostname;
+	lut[BOB_SYS_FREEBSD] = freebsd_aquarium_hostname;
 
-	return lut[vessel->sys](vessel, hostname);
+	return lut[aquarium->sys](aquarium, hostname);
 }
 
 // image component creation functions
 
-static int dummy_vessel_gen_fs(bob_vessel_t* vessel, const char* label) {
-	BOB_FATAL("Generating filesystem for system %d vessels is currently unsupported\n", vessel->sys);
+static int dummy_aquarium_gen_fs(bob_aquarium_t* aquarium, const char* label) {
+	BOB_FATAL("Generating filesystem for system %d aquariums is currently unsupported\n", aquarium->sys);
 	return -1;
 }
 
-static int aquabsd_vessel_gen_fs(bob_vessel_t* vessel, const char* label) {
+static int aquabsd_aquarium_gen_fs(bob_aquarium_t* aquarium, const char* label) {
 	BOB_WARN("%s is not really super well implemented just yet (cf. the long-ass comment at the beginning of the function in " __FILE__ ")\n", __func__)
 
 	// TODO this is actually quite a bit more involved than I would have hoped 😅
@@ -353,7 +353,7 @@ static int aquabsd_vessel_gen_fs(bob_vessel_t* vessel, const char* label) {
 	//      this will be done through some kind of libmkfs library, similar to libmkfs_msdos currently
 	//      this library will be based off of makefs (aquabsd-core/usr.sbin/makefs), which is a program ported over from NetBSD
 	//      makefs is a bit tricky to build out of tree (because of dependencies on sources from mtree, libnetbsd, &c), so I'll probably build libmkfs right into aquaBSD core when I get around to that
-	//      this is a bit unfortunate because it means this program will only really work to build full vessel images on aquaBSD, & not on FreeBSD
+	//      this is a bit unfortunate because it means this program will only really work to build full aquarium images on aquaBSD, & not on FreeBSD
 	//      oh well
 	//      in any case, when I do implement libmkfs, I'll be able to
 	//       - write it in a much cleaner, potentially modular way
@@ -375,32 +375,32 @@ static int aquabsd_vessel_gen_fs(bob_vessel_t* vessel, const char* label) {
 	return rv;
 }
 
-static int freebsd_vessel_gen_fs(bob_vessel_t* vessel, const char* label) {
-	// literally just a wrapper around aquabsd_vessel_gen_fs
+static int freebsd_aquarium_gen_fs(bob_aquarium_t* aquarium, const char* label) {
+	// literally just a wrapper around aquabsd_aquarium_gen_fs
 
-	return aquabsd_vessel_gen_fs(vessel, label);
+	return aquabsd_aquarium_gen_fs(aquarium, label);
 }
 
-int bob_vessel_gen_fs(bob_vessel_t* vessel, const char* label) {
-	CHECK_VESSEL(vessel, -1)
+int bob_aquarium_gen_fs(bob_aquarium_t* aquarium, const char* label) {
+	CHECK_AQUARIUM(aquarium, -1)
 	BOB_INFO("Creating filsystem partition (%s) ...\n", label)
 
-	int (*lut[BOB_SYS_LEN]) (bob_vessel_t* vessel, const char* label);
+	int (*lut[BOB_SYS_LEN]) (bob_aquarium_t* aquarium, const char* label);
 
 	// clear LUT entries
 
 	for (int i = 0; i < sizeof(lut) / sizeof(*lut); i++) {
-		lut[i] = dummy_vessel_gen_fs;
+		lut[i] = dummy_aquarium_gen_fs;
 	}
 
-	lut[BOB_SYS_AQUABSD] = aquabsd_vessel_gen_fs;
-	lut[BOB_SYS_FREEBSD] = freebsd_vessel_gen_fs;
+	lut[BOB_SYS_AQUABSD] = aquabsd_aquarium_gen_fs;
+	lut[BOB_SYS_FREEBSD] = freebsd_aquarium_gen_fs;
 
-	return lut[vessel->sys](vessel, label);
+	return lut[aquarium->sys](aquarium, label);
 }
 
-int bob_vessel_gen_esp(bob_vessel_t* vessel, const char* oem, const char* label) {
-	CHECK_VESSEL(vessel, -1)
+int bob_aquarium_gen_esp(bob_aquarium_t* aquarium, const char* oem, const char* label) {
+	CHECK_AQUARIUM(aquarium, -1)
 	BOB_INFO("Creating EFI system partition (%s) ...\n", label)
 	
 	int rv = -1;
@@ -607,22 +607,22 @@ error_mdctl:
 error_geom_md:
 
 	// should technically be removing the ESP image file on error,
-	// but the whole vessel build directory will be deleted anyway so 🤷
+	// but the whole aquarium build directory will be deleted anyway so 🤷
 
 error_mkfs:
 
 	return rv;
 }
 
-static int dummy_vessel_assemble(bob_vessel_t* vessel) {
-	BOB_FATAL("Assembling system %d vessels is currently unsupported\n", vessel->sys);
+static int dummy_aquarium_assemble(bob_aquarium_t* aquarium) {
+	BOB_FATAL("Assembling system %d aquariums is currently unsupported\n", aquarium->sys);
 	return -1;
 }
 
-static int aquabsd_vessel_assemble(bob_vessel_t* vessel) {
+static int aquabsd_aquarium_assemble(bob_aquarium_t* aquarium) {
 	BOB_WARN("%s is not really super well implemented just yet (cf. the long-ass comment at the beginning of the function in " __FILE__ ")\n", __func__)
 
-	// TODO similar story to aquabsd_vessel_gen_fs; create a libmkimg library to replace this shit
+	// TODO similar story to aquabsd_aquarium_gen_fs; create a libmkimg library to replace this shit
 	//      this is even worse than that lol 💩
 	// TODO also abandon MBR completely in favour of GPT pretty please - there's no reason the installer should be installing GPT but using MBR!
 
@@ -633,9 +633,9 @@ static int aquabsd_vessel_assemble(bob_vessel_t* vessel) {
 
 	int rv = system(cmd);
 
-	vessel->assembled_path = realpath(ASSEMBLED_IMG_PATH, NULL);
+	aquarium->assembled_path = realpath(ASSEMBLED_IMG_PATH, NULL);
 
-	if (!vessel->assembled_path) {
+	if (!aquarium->assembled_path) {
 		BOB_FATAL("Failed to find assembled image file (%s) (%s)\n", ASSEMBLED_IMG_PATH, strerror(errno))
 		rv = -1;
 	}
@@ -643,26 +643,26 @@ static int aquabsd_vessel_assemble(bob_vessel_t* vessel) {
 	return rv;
 }
 
-static int freebsd_vessel_assemble(bob_vessel_t* vessel) {
-	// literally just a wrapper around aquabsd_vessel_assemble
+static int freebsd_aquarium_assemble(bob_aquarium_t* aquarium) {
+	// literally just a wrapper around aquabsd_aquarium_assemble
 
-	return aquabsd_vessel_assemble(vessel);
+	return aquabsd_aquarium_assemble(aquarium);
 }
 
-int bob_vessel_assemble(bob_vessel_t* vessel) {
-	CHECK_VESSEL(vessel, -1)
+int bob_aquarium_assemble(bob_aquarium_t* aquarium) {
+	CHECK_AQUARIUM(aquarium, -1)
 	BOB_INFO("Assembling image file ...\n")
 
-	int (*lut[BOB_SYS_LEN]) (bob_vessel_t* vessel);
+	int (*lut[BOB_SYS_LEN]) (bob_aquarium_t* aquarium);
 
 	// clear LUT entries
 
 	for (int i = 0; i < sizeof(lut) / sizeof(*lut); i++) {
-		lut[i] = dummy_vessel_assemble;
+		lut[i] = dummy_aquarium_assemble;
 	}
 
-	lut[BOB_SYS_AQUABSD] = aquabsd_vessel_assemble;
-	lut[BOB_SYS_FREEBSD] = freebsd_vessel_assemble;
+	lut[BOB_SYS_AQUABSD] = aquabsd_aquarium_assemble;
+	lut[BOB_SYS_FREEBSD] = freebsd_aquarium_assemble;
 
-	return lut[vessel->sys](vessel);
+	return lut[aquarium->sys](aquarium);
 }

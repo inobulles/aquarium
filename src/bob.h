@@ -30,7 +30,7 @@ extern unsigned bob_verbose;
 #define BOB_SUCCESS(...) \
 	printf(BOB_LOG_GREEN "🟢 " BOB_LOG_SIGNATURE " " __VA_ARGS__);
 
-#define BOB_SANITY_CHECK(vessel) \
+#define BOB_SANITY_CHECK(aquarium) \
 	char* __bob_sanity_check_file = strdup(__FILE__); \
 	char* _bob_sanity_check_file = strrchr(__bob_sanity_check_file, '/'); /* get last component of filepath */ \
 	\
@@ -40,10 +40,10 @@ extern unsigned bob_verbose;
 	\
 	*strrchr(++_bob_sanity_check_file, '.') = '\0'; /* remove extension */ \
 	\
-	if (!(vessel)->name || \
-		strcmp(_bob_sanity_check_file, (vessel)->name)) { \
+	if (!(aquarium)->name || \
+		strcmp(_bob_sanity_check_file, (aquarium)->name)) { \
 		\
-		BOB_WARN("Filename (%s) does not match vessel name (%s)\n", _bob_sanity_check_file, (vessel)->name) \
+		BOB_WARN("Filename (%s) does not match aquarium name (%s)\n", _bob_sanity_check_file, (aquarium)->name) \
 	} \
 	\
 	free(__bob_sanity_check_file);
@@ -65,36 +65,36 @@ typedef struct {
 	char* path;
 
 	char* assembled_path;
-} bob_vessel_t;
+} bob_aquarium_t;
 
 // global settings functions
 
 void bob_set_verbose(unsigned verbose);
 void bob_set_chunk_bytes(unsigned chunk_bytes);
 
-// vessel creation/destruction functions
+// aquarium creation/destruction functions
 
-bob_vessel_t* bob_new_vessel(const char* name);
-void bob_del_vessel(bob_vessel_t* vessel);
+bob_aquarium_t* bob_new_aquarium(const char* name);
+void bob_del_aquarium(bob_aquarium_t* aquarium);
 
-// vessel settings functions
+// aquarium settings functions
 
-int bob_vessel_sys(bob_vessel_t* vessel, bob_sys_t sys);
+int bob_aquarium_sys(bob_aquarium_t* aquarium, bob_sys_t sys);
 
-// vessel component functions
+// aquarium component functions
 
-int bob_vessel_net_component(bob_vessel_t* vessel, const char* name, const char* url);
-int bob_vessel_component_extract(bob_vessel_t* vessel, const char* name);
+int bob_aquarium_net_component(bob_aquarium_t* aquarium, const char* name, const char* url);
+int bob_aquarium_component_extract(bob_aquarium_t* aquarium, const char* name);
 
-// vessel configuration functions
+// aquarium configuration functions
 
-int bob_vessel_hostname(bob_vessel_t* vessel, const char* hostname);
+int bob_aquarium_hostname(bob_aquarium_t* aquarium, const char* hostname);
 
 // image component creation functions
 
-int bob_vessel_gen_fs(bob_vessel_t* vessel, const char* label);
-int bob_vessel_gen_esp(bob_vessel_t* vessel, const char* oem, const char* label);
+int bob_aquarium_gen_fs(bob_aquarium_t* aquarium, const char* label);
+int bob_aquarium_gen_esp(bob_aquarium_t* aquarium, const char* oem, const char* label);
 
-int bob_vessel_assemble(bob_vessel_t* vessel);
+int bob_aquarium_assemble(bob_aquarium_t* aquarium);
 
 #endif

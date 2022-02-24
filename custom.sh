@@ -7,7 +7,7 @@ set -e
 # pkg install -y vim
 
 branch="aquabsd.alps"
-short_version="1221a"
+short_version="0222a"
 version="v$short_version-beta"
 repo_url="https://github.com/inobulles/aquabsd-pkg-repo/releases/download/$version"
 
@@ -16,7 +16,7 @@ cd /tmp
 # install external dependencies for the aquaBSD installer
 
 export IGNORE_OSVERSION=yes
-pkg install -y pango librsvg2
+pkg install -y pango librsvg2-rust icu
 
 # install necessary packages for the aquaBSD installer
 
@@ -33,7 +33,7 @@ fetch $repo_url/libmkfs_msdos-$short_version.pkg -o $pkg_out
 
 for package in $(find $pkg_out -type f); do
 	# our packages are built under 'FreeBSD:13:amd64', so prevent 'pkg' from complaining about that
-	ABI="FreeBSD:13:amd64" pkg add $package
+	ABI="FreeBSD:13:amd64" pkg add -M $package
 done
 
 # install aqua root
@@ -103,4 +103,5 @@ rm /usr/local/lib/*.a
 
 # it's back... oh no... it's back
 
-sed -i '' 's/^aqua$/LD_DYNAMIC_WEAK=0 aqua --devices \/usr\/share\/aqua\/devices/g' /etc/rc.local
+ln -s /usr/lib/libarchive.so /usr/lib/libarchive.so.13
+sed -i '' 's/^aqua$/LD_LIBRARY_PATH="\/usr\/local\/lib" aqua/g' /etc/rc.local

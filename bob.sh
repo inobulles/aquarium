@@ -6,7 +6,7 @@ if [ "$(id -u)" != "0" ]; then
 	exit 1
 fi
 
-version="v1221a-beta"
+version="v1021a-beta"
 rootfs="rootfs"
 dist="dist"
 src="src"

@@ -114,7 +114,7 @@ error:
 
 void bob_del_aquarium(bob_aquarium_t* aquarium) {
 	CHECK_AQUARIUM(aquarium, )
-	
+
 	if (aquarium->name) {
 		BOB_INFO("Deleting aquarium (%s) ...\n", aquarium->name)
 		free(aquarium->name);
@@ -131,7 +131,7 @@ void bob_del_aquarium(bob_aquarium_t* aquarium) {
 
 		if (system(cmd)) {
 			free(cmd);
-			
+
 			BOB_FATAL("Failed to delete aquarium directory (%s) (%s)\n", aquarium->path, strerror(errno))
 		}
 
@@ -258,7 +258,7 @@ int bob_aquarium_component_extract(bob_aquarium_t* aquarium, const char* name) {
 
 		const char* error_string = archive_error_string(archive);
 		unsigned useless_warning = error_string && strcmp(error_string, "Can't restore time") == 0;
-		
+
 		if (res != ARCHIVE_OK && !(res == ARCHIVE_WARN && useless_warning)) {
 			BOB_FATAL("Failed to extract the %s component (%s)\n", name, error_string)
 			goto error_extract;
@@ -382,7 +382,7 @@ static int aquabsd_aquarium_gen_fs(bob_aquarium_t* aquarium, const char* label) 
 
 	int rv = system(cmd);
 	free(cmd);
-	
+
 	return rv;
 }
 
@@ -413,7 +413,7 @@ int bob_aquarium_gen_fs(bob_aquarium_t* aquarium, const char* label) {
 int bob_aquarium_gen_esp(bob_aquarium_t* aquarium, const char* oem, const char* label) {
 	CHECK_AQUARIUM(aquarium, -1)
 	BOB_INFO("Creating EFI system partition (%s) ...\n", label)
-	
+
 	int rv = -1;
 
 	// create FAT32 partition for the ESP
@@ -479,7 +479,7 @@ int bob_aquarium_gen_esp(bob_aquarium_t* aquarium, const char* oem, const char* 
 	}
 
 	struct stat sb;
-	
+
 	if (fstat(fd, &sb) < 0) {
 		BOB_FATAL("Failed to stat " ESP_IMG_PATH " (%s)\n", strerror(errno))
 		goto error_stat;
@@ -551,14 +551,14 @@ int bob_aquarium_gen_esp(bob_aquarium_t* aquarium, const char* oem, const char* 
 
 	if (bootx64 < 0) {
 		BOB_FATAL("Failed to create /EFI/BOOT/BOOTX64.efi on ESP partition (%s)\n", strerror(errno))
-		
+
 		close(loader_efi);
 		goto error_boot_copy;
 	}
 
 	if (fcopyfile(loader_efi, bootx64, 0, COPYFILE_ALL) < 0) {
 		BOB_FATAL("Failed to copy boot code (%s)\n", strerror(errno))
-		
+
 		close(loader_efi);
 		close(bootx64);
 

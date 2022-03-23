@@ -4,6 +4,7 @@
 // it also creates a user in the aquarium with the same privileges and home directory (*only if asked, it can also create a separate home directory) as the user which asked for the aquarium to be created
 
 // awesome video on message queues: https://www.youtube.com/watch?v=OYqX19lPb0A
+// (totally underrated channel/guy btw)
 
 #include <bob.h>
 
@@ -19,6 +20,28 @@
 #define MAX_MESSAGES 10 // not yet sure what this signifies
 #define MESSAGE_SIZE 256
 
+#define OP_CREATE_AQUARIUM 0x63
+#define OP_DELETE_AQUARIUM 0x64
+
+// in the future, it may be interesting to add some more of these (e.g. so that aquariums don't have access to '/dev' - you'd want to restrict this access because, even if you trust the aquarium, you're considerably increasing the attack surface in case for e.g. a root service is exploited by a misbehaving user process)
+
+#define FLAG_LINK_HOME 0b01
+#define FLAG_LINK_TMP  0b10
+
+typedef struct {
+	uint8_t op;
+	uint8_t flags;
+	uint8_t name[256];
+} cmd_t;
+
+static inline void __process_cmd(cmd_t* cmd) {
+	if (cmd->flags & FLAG_LINK_HOME) {
+		errx(EXIT_FAILURE, "Command's 'FLAG_LINK_HOME' flag set\n"); // TODO way to *securely* get the user which sent this command?
+	}
+
+	// TODO
+}
+
 int main(void) {
 	// TODO make sure another aquariumd process isn't already running
 
@@ -26,7 +49,7 @@ int main(void) {
 
 	// make sure a message queue named $MQ_NAME doesn't already exist
 
-	mode_t permissions = /* TODO figure this out (yeah, I still don't know this stuff by heart, big deal 😤) */;
+	mode_t permissions = 0420; // owner ("root") can only read, group ("stoners") can only write, and others can do neither - I swear it's a complete coincidence this ends up as 420 in octal - at least I ain't finna forget the permission numbers any time soon 🤣
 
 	struct mq_attr attr = {
 		.mq_flags = O_BLOCK,
@@ -45,7 +68,7 @@ int main(void) {
 
 	// create message queue
 
-	mqd_t mq = mq_open(MQ_NAME, O_CREAT | O_RDWR, mode, attr);
+	mqd_t mq = mq_open(MQ_NAME, O_CREAT | O_RDWR, permissions, attr);
 
 	if (mq < 0) {
 		errx(EXIT_FAILURE, "Failed to create message queue: %s", strerror(errno));
@@ -54,10 +77,10 @@ int main(void) {
 	// block while waiting for messages on the message queue
 
 	while (1) {
-		uint8_t buf[MESSAGE_SIZE];
+		cmd_t cmd;
 		__attribute__((unused)) int priority; // we don't care about priority
 
-		ssize_t len = mq_receive(mqm, buf, sizeof buf, &priority);
+		ssize_t len = mq_receive(mq, &cmd, sizeof cmd, &priority);
 
 		if (errno == EAGAIN) {
 			continue;
@@ -70,6 +93,10 @@ int main(void) {
 		if (len < 0) {
 			errx(EXIT_FAILURE, "mq_receive: %s", strerror(errno));
 		}
+
+		// received a message
+
+		__process_cmd(&cmd);
 	}
 
 	// don't forget to remove the message queue completely

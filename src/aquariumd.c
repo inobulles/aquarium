@@ -8,11 +8,14 @@
 
 #include <bob.h>
 
-#include <stdio.h>
-#include <string.h>
 #include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include <err.h>
+#include <grp.h>
 #include <mqueue.h>
 
 #define MQ_NAME "/aquariumd"
@@ -45,7 +48,24 @@ static inline void __process_cmd(cmd_t* cmd) {
 int main(void) {
 	// TODO make sure another aquariumd process isn't already running
 
-	// TODO make sure the "stoners" group exists, and error if not
+	// make sure the "stoners" group exists, and error if not
+
+	int group_len = getgroups(0, NULL);
+
+	gid_t* gids = malloc(group_len * sizeof *gids);
+	getgroups(group_len, gids);
+
+	for (int i = 0; i < group_len; i++) {
+		struct group* group = gids[group_len];
+
+		if (strcmp(group->gr_name, "stoners") == 0) {
+			goto found;
+		}
+	}
+
+	errx(EXIT_FAILURE, "Couldn't find \"stoners\" group\n");
+
+found:
 
 	// make sure a message queue named $MQ_NAME doesn't already exist
 

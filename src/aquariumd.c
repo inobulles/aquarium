@@ -34,12 +34,27 @@
 typedef struct {
 	uint8_t op;
 	uint8_t flags;
-	uint8_t name[256];
+
+	// what kind of aquarium should be created?
+	// this field follows the following format: 'arch.os.version'
+	// e.g., 'amd64.ubuntu.focal', 'amd64.freebsd.12'
+	// it's ignored if 'cmd_t.op == OP_DELETE_AQUARIUM'
+
+	uint8_t kind[256];
+
+	// where should the aquarium be created or deleted?
+	// this must be in a directory owned by the user issuing the command
+
+	uint8_t path[256];
 } cmd_t;
 
 static inline void __process_cmd(uid_t uid, cmd_t* cmd) {
 	if (cmd->flags & FLAG_LINK_HOME) {
-		errx(EXIT_FAILURE, "Command's 'FLAG_LINK_HOME' flag set\n"); // TODO way to *securely* get the user which sent this command?
+		errx(EXIT_FAILURE, "Command's 'FLAG_LINK_HOME' flag set (not yet implemented)\n");
+	}
+
+	if (cmd->flags & FLAG_LINK_TMP) {
+		errx(EXIT_FAILURE, "Command's 'FLAG_LINK_TMP' flag set (not yet implemented)\n");
 	}
 
 	// TODO
@@ -53,17 +68,21 @@ int main(void) {
 	gid_t* gids = malloc(group_len * sizeof *gids);
 	getgroups(group_len, gids);
 
+	gid_t stoners_gid = -1 /* i.e., no "stoners" group */;
+
 	for (int i = 0; i < group_len; i++) {
-		struct group* group = gids[group_len];
+		gid_t gid = gids[group_len];
+		struct group* group = getgrgid(gid); // don't need to free this
 
 		if (strcmp(group->gr_name, "stoners") == 0) {
-			goto found;
+			stoners_gid = gid;
+			break;
 		}
 	}
 
-	errx(EXIT_FAILURE, "Couldn't find \"stoners\" group\n");
-
-found:
+	if (stoners_gid < 0) {
+		errx(EXIT_FAILURE, "Couldn't find \"stoners\" group\n");
+	}
 
 	// make sure a message queue named $MQ_NAME doesn't already exist
 	// this means that we don't need to check if another aquariumd process is running, because it fails if the message queue has already been created by another process
@@ -91,6 +110,12 @@ found:
 
 	if (mq < 0) {
 		errx(EXIT_FAILURE, "Failed to create message queue: %s", strerror(errno));
+	}
+
+	// set group ownership to the "stoners" group
+
+	if (fchown(mq, getuid() /* most likely gonna be root */, stoners_gid) < 0) {
+		errx(EXIT_FAILURE, "fchown: %s\n", strerror(errno));
 	}
 
 	// setup message queue notification signal

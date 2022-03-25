@@ -37,7 +37,7 @@ typedef struct {
 	uint8_t name[256];
 } cmd_t;
 
-static inline void __process_cmd(cmd_t* cmd) {
+static inline void __process_cmd(uid_t uid, cmd_t* cmd) {
 	if (cmd->flags & FLAG_LINK_HOME) {
 		errx(EXIT_FAILURE, "Command's 'FLAG_LINK_HOME' flag set\n"); // TODO way to *securely* get the user which sent this command?
 	}
@@ -46,8 +46,6 @@ static inline void __process_cmd(cmd_t* cmd) {
 }
 
 int main(void) {
-	// TODO make sure another aquariumd process isn't already running
-
 	// make sure the "stoners" group exists, and error if not
 
 	int group_len = getgroups(0, NULL);
@@ -68,8 +66,9 @@ int main(void) {
 found:
 
 	// make sure a message queue named $MQ_NAME doesn't already exist
+	// this means that we don't need to check if another aquariumd process is running, because it fails if the message queue has already been created by another process
 
-	mode_t permissions = 0420; // owner ("root") can only read, group ("stoners") can only write, and others can do neither - I swear it's a complete coincidence this ends up as 420 in octal - at least I ain't finna forget the permission numbers any time soon 🤣
+	mode_t permissions = 0420; // owner ("root") can only read, group ("stoners") can only write, and others can do neither - istg it's a complete coincidence this ends up as 420 in octal - at least I ain't finna forget the permission numbers any time soon 🤣
 
 	struct mq_attr attr = {
 		.mq_flags = O_BLOCK,
@@ -94,16 +93,40 @@ found:
 		errx(EXIT_FAILURE, "Failed to create message queue: %s", strerror(errno));
 	}
 
+	// setup message queue notification signal
+	// thanks @qookie 😄
+
+	sigset_t set;
+	sigemptyset(&set);
+	sigaddset(&set, SIGUSR1);
+
+	sigprocmask(SIG_BLOCK, &set, NULL);
+
 	// block while waiting for messages on the message queue
 
 	while (1) {
+		siginfo_t info;
+		sigwaitinfo(&set, &info, NULL);
+
+		// received a message, run a bunch of sanity checks on it
+
+		if (info.si_mqd != mq) {
+			continue;
+		}
+
+		uid_t uid = info.si_uid;
+
+		// read message data & process it
+
 		cmd_t cmd;
 		__attribute__((unused)) int priority; // we don't care about priority
+
+	retry: // fight me, this is more readable than a loop
 
 		ssize_t len = mq_receive(mq, &cmd, sizeof cmd, &priority);
 
 		if (errno == EAGAIN) {
-			continue;
+			goto retry;
 		}
 
 		if (errno == ETIMEDOUT) {
@@ -114,9 +137,7 @@ found:
 			errx(EXIT_FAILURE, "mq_receive: %s", strerror(errno));
 		}
 
-		// received a message
-
-		__process_cmd(&cmd);
+		__process_cmd(uid, &cmd);
 	}
 
 	// don't forget to remove the message queue completely

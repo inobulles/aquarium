@@ -2,11 +2,13 @@
 // we don't want only the root user to be able to create/run programs inside aquariums, so this daemon, which runs as root, basically waits until another process asks it to create a new aquarium from a sanctioned list of images
 // this process can be a user process, so long as that user is part of the "stoners" group (the group allowed to create aquariums)
 // it also creates a user in the aquarium with the same privileges and home directory (*only if asked, it can also create a separate home directory) as the user which asked for the aquarium to be created
+// TODO will probably need a setuid tool to chroot into the home directory as user
 
 // awesome video on message queues: https://www.youtube.com/watch?v=OYqX19lPb0A
 // (totally underrated channel/guy btw)
 
 #include <bob.h>
+#include <copyfile.h>
 
 #include <errno.h>
 #include <stdio.h>
@@ -28,8 +30,9 @@
 
 // in the future, it may be interesting to add some more of these (e.g. so that aquariums don't have access to '/dev' - you'd want to restrict this access because, even if you trust the aquarium, you're considerably increasing the attack surface in case for e.g. a root service is exploited by a misbehaving user process)
 
-#define FLAG_LINK_HOME 0b01
-#define FLAG_LINK_TMP  0b10
+#define FLAG_LINK_HOME 0b001
+#define FLAG_LINK_TMP  0b010
+#define FLAG_X11       0b100
 
 typedef struct {
 	uint8_t op;
@@ -43,24 +46,68 @@ typedef struct {
 	uint8_t kind[256];
 
 	// where should the aquarium be created or deleted?
-	// this must be in a directory owned by the user issuing the command
+	// this must be in a directory writable to by the user issuing the command
+	// TODO figure out how this will work with 'OP_DELETE_AQUARIUM', because we don't want stoners being allowed to remove any old directories (a directory could very well be owned by the user but contain files which aren't!)
 
-	uint8_t path[256];
+	uint32_t path_len;
+	uint8_t path[];
 } cmd_t;
 
 static inline void __process_cmd(uid_t uid, cmd_t* cmd) {
 	if (cmd->flags & FLAG_LINK_HOME) {
-		errx(EXIT_FAILURE, "Command's 'FLAG_LINK_HOME' flag set (not yet implemented)\n");
+		warnx("Command's 'FLAG_LINK_HOME' flag set (not yet implemented)\n");
+		return;
 	}
 
 	if (cmd->flags & FLAG_LINK_TMP) {
-		errx(EXIT_FAILURE, "Command's 'FLAG_LINK_TMP' flag set (not yet implemented)\n");
+		warnx("Command's 'FLAG_LINK_TMP' flag set (not yet implemented)\n");
+		return;
 	}
 
-	// TODO
+	if (cmd->op != OP_CREATE_AQUARIUM) {
+		warnx("Only the 'OP_CREATE_AQUARIUM' operation is currently implemented\n");
+		return;
+	}
+
+	// verify calling user's ownership of & write access to 'cmd->path'
+	// there may be a better way of doing this (ideally, we'd check for write access, regardless of if the user is the owner or not) (also, this won't work with ACL's)
+
+	struct stat sb;
+
+	if (stat(cmd->path, &sb) < 0) {
+		warnx("stat: %s\n", strerror(errno));
+		return;
+	}
+
+	if (!S_ISDIR(sb)) {
+		warnx("Aquarium destination directory '%s' is not a directory\n", cmd->path);
+		return;
+	}
+
+	if (sb.st_uid != uid) {
+		warnx("User (UID %d) doesn't own aquarium destination directory '%s' (owned by UID %d)\n", uid, cmd->path, sb.st_uid);
+		return;
+	}
+
+	if (!(sb.st_flags & S_IWUSR)) {
+		warnx("Owner of aquarium destination directory '%s' does not have write access\n", cmd->path);
+		return;
+	}
+
+	// TODO copy over aquarium file structure
+	// TODO set user:group ownership of aquarium root
+	// TODO create user home directory in aquarium, and link it if 'cmd->flags & FLAG_LINK_HOME'
+	// TODO link/create other directories necessary for this stuff to work (e.g. a 'tmpfs', 'linprocfs/linsysfs' for Linux aquariums, &c)
+	// TODO polish up the aquarium (setup X11 forwarding if requested, create '/etc/resolv.conf', set hostname, &c)
 }
 
 int main(void) {
+	// make sure aquariumd is being run as root
+
+	if (getuid()) {
+		errx(EXIT_FAILURE, "aquariumd must be run as root (UID 0)");
+	}
+
 	// make sure the "stoners" group exists, and error if not
 
 	int group_len = getgroups(0, NULL);

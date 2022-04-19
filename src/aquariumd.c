@@ -104,8 +104,10 @@ static inline void __process_cmd(uid_t uid, cmd_t* cmd) {
 int main(void) {
 	// make sure aquariumd is being run as root
 
-	if (getuid()) {
-		errx(EXIT_FAILURE, "aquariumd must be run as root (UID 0)");
+	uid_t uid = getuid();
+
+	if (uid) {
+		errx(EXIT_FAILURE, "aquariumd must be run as root (UID 0, current UID = %d)", uid);
 	}
 
 	// make sure the "stoners" group exists, and error if not
@@ -119,7 +121,7 @@ int main(void) {
 
 	for (int i = 0; i < group_len; i++) {
 		gid_t gid = gids[group_len];
-		struct group* group = getgrgid(gid); // don't need to free this
+		struct group* group = getgrgid(gid); // don't need to free this as per manpage
 
 		if (strcmp(group->gr_name, "stoners") == 0) {
 			stoners_gid = gid;
@@ -137,31 +139,27 @@ int main(void) {
 	mode_t permissions = 0420; // owner ("root") can only read, group ("stoners") can only write, and others can do neither - istg it's a complete coincidence this ends up as 420 in octal - at least I ain't finna forget the permission numbers any time soon 🤣
 
 	struct mq_attr attr = {
-		.mq_flags = O_BLOCK,
+		.mq_flags = 0, // ignored for 'mq_open'
 		.mq_maxmsg = MAX_MESSAGES,
 		.mq_msgsize = MESSAGE_SIZE,
-		.mq_curmsgs = 0,
+		.mq_curmsgs = 0, // ignored for 'mq_open'
 	};
 
-	if (mq_open(MQ_NAME, O_CREAT | O_EXCL, permissions, &attr) < 0) {
-		if (errno == EEXIST) {
-			errx(EXIT_FAILURE, "Message queue named \"" MQ_NAME "\" already exists");
-		}
-
-		errx(EXIT_FAILURE, "Failed detecting message queue: %s", strerror(errno));
+	if (mq_open(MQ_NAME, O_CREAT | O_EXCL, permissions, &attr) < 0 && errno == EEXIST) {
+		errx(EXIT_FAILURE, "Message queue named \"" MQ_NAME "\" already exists");
 	}
 
 	// create message queue
 
-	mqd_t mq = mq_open(MQ_NAME, O_CREAT | O_RDWR, permissions, attr);
+	mqd_t mq = mq_open(MQ_NAME, O_CREAT | O_RDWR, permissions, &attr);
 
 	if (mq < 0) {
-		errx(EXIT_FAILURE, "Failed to create message queue: %s", strerror(errno));
+		errx(EXIT_FAILURE, "mq_open(\"" MQ_NAME "\"): %s", strerror(errno));
 	}
 
 	// set group ownership to the "stoners" group
 
-	if (fchown(mq, getuid() /* most likely gonna be root */, stoners_gid) < 0) {
+	if (fchown(mq, uid /* most likely gonna be root */, stoners_gid) < 0) {
 		errx(EXIT_FAILURE, "fchown: %s\n", strerror(errno));
 	}
 
@@ -169,6 +167,7 @@ int main(void) {
 	// thanks @qookie 😄
 
 	sigset_t set;
+
 	sigemptyset(&set);
 	sigaddset(&set, SIGUSR1);
 
@@ -178,7 +177,7 @@ int main(void) {
 
 	while (1) {
 		siginfo_t info;
-		sigwaitinfo(&set, &info, NULL);
+		sigwaitinfo(&set, &info);
 
 		// received a message, run a bunch of sanity checks on it
 
@@ -193,7 +192,7 @@ int main(void) {
 		cmd_t cmd;
 		__attribute__((unused)) int priority; // we don't care about priority
 
-	retry: // fight me, this is more readable than a loop
+	retry: {} // fight me, this is more readable than a loop
 
 		ssize_t len = mq_receive(mq, &cmd, sizeof cmd, &priority);
 

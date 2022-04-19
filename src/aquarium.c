@@ -18,6 +18,7 @@
 //  - setuid root
 //  - extract template in some aquariums folder if it exists
 //  - if it doesn't, first download it, and compare hashed to a database of trusted templates to make sure there isn't anything weird going on
+//  - create user and stuff
 //  - do any final setup (e.g. copying '/etc/resolv.conf' for networking)
 //  - write path of aquarium pointer file & its associated aquarium to aquarium database (and give it some unique ID)
 //  - setuid user (CHECK FOR ERRORS!)
@@ -52,7 +53,12 @@ __FBSDID("$FreeBSD$");
 
 #include <err.h>
 #include <grp.h>
+#include <paths.h>
 #include <pwd.h>
+
+#include <sys/mount.h>
+#include <sys/procctl.h>
+#include <sys/uio.h>
 
 // TODO the two following headers are necessary for 'fetch.h' but are not included
 //      most likely a bug, fix this
@@ -192,10 +198,13 @@ static int do_create(void) {
 	archive_read_free(archive);
 
 	// copy over /etc/resolv.conf for networking to, well, work
+	// TODO copyfile: Operation not supported
 
-	if (copyfile("/etc/resolv.conf", "etc/resolv.conf", 0, COPYFILE_ALL) < 0) {
-		errx(EXIT_FAILURE, "copyfile: %s\n", strerror(errno));
-	}
+	system("cp /etc/resolv.conf etc/resolv.conf");
+
+	// if (copyfile("/etc/resolv.conf", "etc/resolv.conf", 0, COPYFILE_ALL) < 0) {
+	// 	errx(EXIT_FAILURE, "copyfile: %s\n", strerror(errno));
+	// }
 
 	// TODO write info to aquarium database
 
@@ -205,15 +214,93 @@ static int do_create(void) {
 		errx(EXIT_FAILURE, "setuid: %s\n", strerror(errno));
 	}
 
-	fprintf(fp, "%s %s", template, aquarium_path);
+	fprintf(fp, "%s", aquarium_path);
 	fclose(fp);
 
 	return EXIT_SUCCESS;
 }
 
 static int do_enter(void) {
-	// TODO enter aquarium
-	return EXIT_FAILURE;
+	// read the aquarium pointer file
+
+	FILE* fp = fopen(path, "rb");
+
+	if (!fp) {
+		errx(EXIT_FAILURE, "fopen: %s\n", strerror(errno));
+	}
+
+	fseek(fp, 0, SEEK_END);
+	size_t len = ftell(fp);
+
+	rewind(fp);
+
+	char* aquarium_path = malloc(len + 1);
+	aquarium_path[len] = 0;
+
+	if (fread(aquarium_path, 1, len, fp) != len) {
+		errx(EXIT_FAILURE, "fread: %s\n", strerror(errno));
+	}
+
+	// TODO make sure the path of the aquarium pointer file is well the one contained in the relevant entry of the aquarium database
+
+	if (chdir(aquarium_path) < 0) {
+		errx(EXIT_FAILURE, "chdir: %s\n", strerror(errno));
+	}
+
+	// setuid root
+
+	uid_t uid = getuid();
+
+	if (setuid(0) < 0) {
+		errx(EXIT_FAILURE, "setuid: %s\n", strerror(errno));
+	}
+
+	// mount devfs filesystem
+
+	#define IOV(name, val) \
+		(struct iovec) { .iov_base = (name), .iov_len = strlen((name)) + 1 }, \
+		(struct iovec) { .iov_base = (val ), .iov_len = strlen((val )) + 1 }
+
+	struct iovec iov[] = {
+		IOV("fstype", "devfs"),
+		IOV("fspath", "dev"),
+	};
+
+	if (nmount(iov, sizeof(iov) / sizeof(*iov), 0) < 0) {
+		errx(EXIT_FAILURE, "nmount: failed to mount devfs: %s\n", strerror(errno));
+	}
+
+	// actually chroot
+
+	// int flag = PROC_NO_NEW_PRIVS_ENABLE;
+
+	// if (procctl(P_PID, getpid(), PROC_NO_NEW_PRIVS_CTL, &flag) < 0) {
+	// 	errx(EXIT_FAILURE, "procctl: %s\n", strerror(errno));
+	// }
+
+	struct passwd* passwd = getpwuid(uid); // this must come before the chroot
+
+	if (chroot(aquarium_path) < 0) {
+		errx(EXIT_FAILURE, "chroot: %s\n", strerror(errno));
+	}
+
+	// if (setuid(uid) < 0) {
+	// 	errx(EXIT_FAILURE, "setuid: %s\n", strerror(errno));
+	// }
+
+	// char* shell = NULL; // getenv("SHELL");
+
+	// if (!shell) {
+	// 	shell = _PATH_BSHELL; // /bin/sh
+	// }
+
+	// execlp(shell, shell, "-i", NULL);
+	// errx(EXIT_FAILURE, "%s: %s", shell, strerror(errno));
+
+	execlp("su", "su", "-", passwd->pw_name, NULL);
+	// execlp("/bin/login", "/bin/login", "obiwac", NULL);
+
+	return EXIT_SUCCESS;
 }
 
 // main function

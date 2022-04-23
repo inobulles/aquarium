@@ -6,7 +6,7 @@ if [ "$(id -u)" != "0" ]; then
 	exit 1
 fi
 
-version="v1021a-beta"
+version="v0422a-beta"
 rootfs="rootfs"
 dist="dist"
 src="src"
@@ -42,6 +42,7 @@ cp $src/release/rc.local $rootfs/etc
 echo "hostname=aquabsd-installer" > $rootfs/etc/rc.conf
 echo "sendmail_enable=\"NONE\"" >> $rootfs/etc/rc.conf
 echo "hostid_enable=\"NO\"" >> $rootfs/etc/rc.conf
+echo "kld_list=\"vesa\"" >> $rootfs/etc/rc.conf # as of commit b8cf1c5, the vesa kernel module isn't statically linked to the kernel in the default configuration ('sys/amd64/conf/GENERIC')
 echo "debug.witness.trace=0" >> $rootfs/etc/sysctl.conf
 
 # set up bootloader

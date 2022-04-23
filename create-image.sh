@@ -34,11 +34,16 @@ make_esp_file $esp_image $fat32min $rootfs/boot/loader.efi
 echo "[BOB] Assembling final image ..."
 
 mkimg -s mbr -b $rootfs/boot/mbr -p efi:=$esp_image -p freebsd:-"mkimg -s bsd -b $rootfs/boot/boot -p freebsd-ufs:=$image.part" -a 2 -o $image
+chmod g+w $image
 
 # cleanup
 
 rm $esp_image
 rm $image.part
 
-#xz -v -9 -T $(sysctl -n hw.ncpu) $image
-echo "[BOB] Done (output is in $image.xz)"
+echo "[BOB] Done (output is in $image)"
+
+# uncomment this part if you'd like an XZ-compressed image to be produced
+
+# xz -v -9 -T $(sysctl -n hw.ncpu) $image
+# echo "[BOB] Done (output is in $image.xz)"

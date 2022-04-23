@@ -1,5 +1,6 @@
 dist/
 out/
-src/
+bin/
 rootfs/
+*.out
 *.core

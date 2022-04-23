@@ -17,10 +17,6 @@ mkdir -p $dist
 
 if [ ! -f $dist/kernel.txz ]; then fetch https://github.com/inobulles/aquabsd-core/releases/download/$version/kernel.txz -o $dist/kernel.txz; fi
 if [ ! -f $dist/base.txz   ]; then fetch https://github.com/inobulles/aquabsd-core/releases/download/$version/base.txz   -o $dist/base.txz  ; fi
-if [ ! -f $dist/src.tgz    ]; then fetch https://github.com/inobulles/aquabsd-core/archive/refs/tags/$version.tar.gz     -o $dist/src.tgz   ; fi
-
-rm -rf $src
-mkdir $src
 
 if [ -d $rootfs ]; then
 	chflags -R noschg $rootfs
@@ -28,13 +24,6 @@ fi
 
 rm -rf $rootfs
 mkdir $rootfs
-
-# extract the source (we need some files from there which are not included in the distributions)
-
-echo "[BOB] Extracting source ..."
-
-tar -xf $dist/src.tgz -C $src
-mv $src/*/* $src
 
 # extract the kernel and base distributions to our rootfs
 

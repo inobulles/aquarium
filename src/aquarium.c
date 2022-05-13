@@ -82,10 +82,14 @@ __FBSDID("$FreeBSD$");
 #define TEMPLATES_PATH BASE_PATH "templates/"
 #define AQUARIUMS_PATH BASE_PATH "aquariums/"
 
+#define ILLEGAL_TEMPLATE_PREFIX '.'
+
 #define SANCTIONED_TEMPLATES   BASE_PATH "templates_remote"
 #define AQUARIUM_DATABASE_PATH BASE_PATH "aquariums_db"
 
-#define ARCHIVE_CHUNK_BYTES 4096
+#define PROGRESS_FREQUENCY  (1 << 22)
+#define FETCH_CHUNK_BYTES   (1 << 16)
+#define ARCHIVE_CHUNK_BYTES (1 << 12)
 
 #define LOG(...) \
 	if (verbose) { \
@@ -236,7 +240,7 @@ found:
 	printf("Found template, downloading from %s ...\n", url);
 
 	char* path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
-	asprintf(&path, TEMPLATES_PATH ".%s.txz", name);
+	asprintf(&path, TEMPLATES_PATH "%c%s.txz", ILLEGAL_TEMPLATE_PREFIX, name);
 
 	/* FILE* */ fp = fopen(path, "w");
 
@@ -260,13 +264,13 @@ found:
 
 	// start download
 
-	uint8_t chunk[1 << 16];
+	uint8_t chunk[FETCH_CHUNK_BYTES];
 	size_t chunk_bytes;
 
 	while ((chunk_bytes = fread(chunk, 1, sizeof chunk, fetch_fp)) > 0) {
 		total += chunk_bytes;
 
-		if (!(total % (1 << 22))) {
+		if (!(total % PROGRESS_FREQUENCY)) {
 			float progress = (float) total / bytes;
 			printf("Downloading %f%% done\n", progress * 100);
 		}
@@ -299,7 +303,7 @@ found:
 			errx(EXIT_FAILURE, "remove: failed to remove %s: %s", path, strerror(errno));
 		}
 
-		errx(EXIT_FAILURE, "Total size of downloaded template (%zu bytes) is not the size expected (%zu bytes)", total, bytes);
+		errx(EXIT_FAILURE, "Total size of downloaded template (%zu bytes) is not the size expected (%zu bytes). Someone may be trying to swindle you!", total, bytes);
 	}
 
 	if (strcmp(hash_hex, sha256)) {
@@ -307,7 +311,7 @@ found:
 			errx(EXIT_FAILURE, "remove: failed to remove %s: %s", path, strerror(errno));
 		}
 
-		errx(EXIT_FAILURE, "SHA256 hash of downloaded template (%s) is not the same as expected (%s)", hash_hex, sha256);
+		errx(EXIT_FAILURE, "SHA256 hash of downloaded template (%s) is not the same as expected (%s). Someone may be trying to swindle you!", hash_hex, sha256);
 	}
 
 	// checks have succeeded; move temporary file to permanent position
@@ -318,13 +322,15 @@ found:
 	if (rename(path, final_path) < 0) {
 		errx(EXIT_FAILURE, "rename: failed to rename %s to %s: %s", path, final_path, strerror(errno));
 	}
-
-	exit(0);
 }
 
 static int do_create(void) {
 	if (!path) {
 		usage();
+	}
+
+	if (*template == ILLEGAL_TEMPLATE_PREFIX) {
+		errx(EXIT_FAILURE, "%s template is illegal (starts with ILLEGAL_TEMPLATE_PREFIX, '%c'). Someone may be trying to swindle you!", template, ILLEGAL_TEMPLATE_PREFIX);
 	}
 
 	// open aquarium pointer file for writing

@@ -71,6 +71,8 @@ __FBSDID("$FreeBSD$");
 #include <copyfile.h>
 #include <fetch.h>
 
+#include <openssl/sha.h>
+
 // defines
 
 #define STONERS_GROUP "stoners"
@@ -200,6 +202,7 @@ static inline void __download_template(const char* template) {
 
 			else if (kind == SHA256) {
 				sha256 = tok;
+				sha256[strlen(sha256) - 1] = '\0';
 			}
 
 			if (++kind >= SENTINEL) {
@@ -245,7 +248,14 @@ found:
 		errx(EXIT_FAILURE, "Failed to download %s", url);
 	}
 
+	// checking (size & hash) stuff
+
 	size_t total = 0;
+
+	SHA256_CTX sha_context;
+	SHA256_Init(&sha_context);
+
+	// start download
 
 	uint8_t chunk[1 << 16];
 	size_t chunk_bytes;
@@ -258,18 +268,39 @@ found:
 			printf("Downloading %f%% done\n", progress * 100);
 		}
 
+		SHA256_Update(&sha_context, chunk, chunk_bytes);
+
 		if (fwrite(chunk, 1, chunk_bytes, fp) < chunk_bytes) {
 			break;
 		}
 	}
 
+	// clean up & process SHA256 digest
+
 	fclose(fp);
 	fclose(fetch_fp);
+
+	uint8_t hash[SHA256_DIGEST_LENGTH];
+	SHA256_Final(hash, &sha_context);
+
+	char hash_hex[SHA256_DIGEST_LENGTH * 2 + 1] = { 0 }; // each byte in the hash can be represented with two hex digits
+
+	for (size_t i = 0; i < sizeof hash; i++) {
+		snprintf(hash_hex, sizeof hash_hex, "%s%02x", hash_hex, hash[i]);
+	}
 
 	// template has been downloaded, check its size & SHA256 hash
 	// TODO between when the template is downloaded and all checks have finished, there's a potential for a race condition in which the template is malicious but still on the file system in the right place
 	//      a simple solution to this would be to download the template with a different name, e.g. a '.' before it, such that 'aquarium' knows its currently unsafe to read
 	//      then, once all checks have passed, the '.' infront of the template may be removed
+
+	if (total != bytes) {
+		errx(EXIT_FAILURE, "Total size of downloaded template (%zu bytes) is not the size expected (%zu bytes)", total, bytes);
+	}
+
+	if (strcmp(hash_hex, sha256)) {
+		errx(EXIT_FAILURE, "SHA256 hash of downloaded template (%s) is not the same as expected (%s)", hash_hex, sha256);
+	}
 
 	exit(0);
 }

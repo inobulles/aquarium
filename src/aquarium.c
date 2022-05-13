@@ -475,7 +475,9 @@ static int do_create(void) {
 	// enter the newly created aquarium to do a bit of configuration
 	// we can't do this is all in C, because, well, there's a chance the template is not the operating system we're currently running
 	// this does thus depend a lot on the platform we're running on
-	// for the moment this is all hardcoded, but in all likelyhood, this will be in a script found somewhere in the aquarium template
+	// TODO for the moment this is all hardcoded, but in all likelyhood, this will be in a script found somewhere in the aquarium template
+	//      this could probably be quite easy if all the aquarium info was passed as a standard set of environment variables or something
+	//      the only problem with having a script in the aquarium, is that images must be built with the knowledge they may be run in an aquarium
 
 	os_info_t os = __retrieve_os_info();
 
@@ -485,6 +487,10 @@ static int do_create(void) {
 
 	if (os == OS_LINUX) {
 		system("useradd obiwac -u 1001 -m -s /bin/bash && passwd -d obiwac && echo 'obiwac ALL=(ALL:ALL) ALL' >> /etc/sudoers");
+	}
+
+	else {
+		system("pw useradd obiwac -u 1001 -m -s /bin/sh -G wheel -w none");
 	}
 
 	// TODO write info to aquarium database
@@ -564,34 +570,11 @@ static int do_enter(void) {
 	}
 
 	// OS-specific actions
+	// treat OS_GENERIC OS' as the default (i.e. like their host OS)
 
 	os_info_t os = __retrieve_os_info();
 
-	if (os == OS_FBSD) {
-		// mount procfs
-
-		struct iovec iov_proc[] = {
-			IOV("fstype", "procfs"),
-			IOV("fspath", "proc"),
-		};
-
-		if (nmount(iov_proc, sizeof(iov_proc) / sizeof(*iov_proc), 0) < 0) {
-			errx(EXIT_FAILURE, "nmount: failed to mount procfs: %s", strerror(errno));
-		}
-
-		// mount sysfs
-
-		struct iovec iov_sys[] = {
-			IOV("fstype", "sysfs"),
-			IOV("fspath", "sys"),
-		};
-
-		if (nmount(iov_sys, sizeof(iov_sys) / sizeof(*iov_sys), 0) < 0) {
-			errx(EXIT_FAILURE, "nmount: failed to mount sysfs: %s", strerror(errno));
-		}
-	}
-
-	else if (os == OS_LINUX) {
+	if (os == OS_LINUX) {
 		// mount linprocfs
 
 		struct iovec iov_proc[] = {
@@ -612,6 +595,19 @@ static int do_enter(void) {
 
 		if (nmount(iov_sys, sizeof(iov_sys) / sizeof(*iov_sys), 0) < 0) {
 			errx(EXIT_FAILURE, "nmount: failed to mount linsysfs: %s", strerror(errno));
+		}
+	}
+
+	else {
+		// mount procfs
+
+		struct iovec iov_proc[] = {
+			IOV("fstype", "procfs"),
+			IOV("fspath", "proc"),
+		};
+
+		if (nmount(iov_proc, sizeof(iov_proc) / sizeof(*iov_proc), 0) < 0) {
+			errx(EXIT_FAILURE, "nmount: failed to mount procfs: %s", strerror(errno));
 		}
 	}
 

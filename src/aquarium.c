@@ -545,6 +545,32 @@ static int do_enter(void) {
 		errx(EXIT_FAILURE, "nmount: failed to mount tmpfs: %s", strerror(errno));
 	}
 
+	// are we running a Linux aquarium?
+
+	if (is_linux) {
+		// mount linprocfs
+
+		struct iovec iov_proc[] = {
+			IOV("fstype", "linprocfs"),
+			IOV("fspath", "proc"),
+		};
+
+		if (nmount(iov_proc, sizeof(iov_proc) / sizeof(*iov_proc), 0) < 0) {
+			errx(EXIT_FAILURE, "nmount: failed to mount linprocfs: %s", strerror(errno));
+		}
+
+		// mount linsysfs
+
+		struct iovec iov_sys[] = {
+			IOV("fstype", "linsysfs"),
+			IOV("fspath", "sys"),
+		};
+
+		if (nmount(iov_sys, sizeof(iov_sys) / sizeof(*iov_sys), 0) < 0) {
+			errx(EXIT_FAILURE, "nmount: failed to mount linsysfs: %s", strerror(errno));
+		}
+	}
+
 	// actually chroot
 
 	// int flag = PROC_NO_NEW_PRIVS_ENABLE;

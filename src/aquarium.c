@@ -502,13 +502,28 @@ static int do_enter(void) {
 		(struct iovec) { .iov_base = (name), .iov_len = strlen((name)) + 1 }, \
 		(struct iovec) { .iov_base = (val ), .iov_len = strlen((val )) + 1 }
 
-	struct iovec iov[] = {
+	struct iovec iov_dev[] = {
 		IOV("fstype", "devfs"),
 		IOV("fspath", "dev"),
 	};
 
-	if (nmount(iov, sizeof(iov) / sizeof(*iov), 0) < 0) {
+	if (nmount(iov_dev, sizeof(iov_dev) / sizeof(*iov_dev), 0) < 0) {
 		errx(EXIT_FAILURE, "nmount: failed to mount devfs: %s", strerror(errno));
+	}
+
+	// mount tmpfs filesystem
+	// we don't wanna overwrite anything potentially already inside of /tmp
+	// to do that, the manual (nmount(2)) suggests we use the MNT_EMPTYDIR flag
+	// there seem to be a few inconsistencies vis-à-vis the type of 'flags', so instead we can simply use the 'emptydir' iov (as can be seen in '/usr/include/sys/mount.h')
+
+	struct iovec iov_tmp[] = {
+		IOV("fstype", "tmpfs"),
+		IOV("fspath", "tmp"),
+		IOV("emptydir", ""),
+	};
+
+	if (nmount(iov_tmp, sizeof(iov_tmp) / sizeof(*iov_tmp), 0) < 0 && errno != ENOTEMPTY) {
+		errx(EXIT_FAILURE, "nmount: failed to mount tmpfs: %s", strerror(errno));
 	}
 
 	// actually chroot

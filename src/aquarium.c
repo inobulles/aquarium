@@ -336,7 +336,7 @@ static int do_create(void) {
 	// open aquarium pointer file for writing
 	// TODO don't forget to fclose(fp) on each error here (in fact that's probably needed for many other FILE* objects around the codebase)
 
-	FILE* fp = fopen(path, "w");
+	FILE* fp = fopen(path, "wx");
 
 	if (!fp) {
 		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", path, strerror(errno));

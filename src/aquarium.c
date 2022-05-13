@@ -571,6 +571,32 @@ static int do_enter(void) {
 		}
 	}
 
+	// are we running a FreeBSD aquarium?
+
+	if (is_freebsd) {
+		// mount procfs
+
+		struct iovec iov_proc[] = {
+			IOV("fstype", "procfs"),
+			IOV("fspath", "proc"),
+		};
+
+		if (nmount(iov_proc, sizeof(iov_proc) / sizeof(*iov_proc), 0) < 0) {
+			errx(EXIT_FAILURE, "nmount: failed to mount procfs: %s", strerror(errno));
+		}
+
+		// mount sysfs
+
+		struct iovec iov_sys[] = {
+			IOV("fstype", "sysfs"),
+			IOV("fspath", "sys"),
+		};
+
+		if (nmount(iov_sys, sizeof(iov_sys) / sizeof(*iov_sys), 0) < 0) {
+			errx(EXIT_FAILURE, "nmount: failed to mount sysfs: %s", strerror(errno));
+		}
+	}
+
 	// actually chroot
 
 	// int flag = PROC_NO_NEW_PRIVS_ENABLE;

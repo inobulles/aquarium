@@ -496,6 +496,25 @@ static int do_enter(void) {
 		errx(EXIT_FAILURE, "setuid: %s", strerror(errno));
 	}
 
+	// retrieve information about the OS running in the aquarium
+
+	FILE* os_release = fopen("etc/os-release", "r");
+
+	if (!fp) {
+		errx(EXIT_FAILURE, "fopen: failed to open aquarium /etc/os-release file: %s", strerror(errno));
+	}
+
+	char buf[256];
+	char* os = fgets(buf, sizeof buf, os_release);
+
+	os += strlen("NAME=\"");
+	os[strlen(os) - 2] = '\0';
+
+	fclose(os_release);
+
+	bool is_linux = !strcmp(os, "Ubuntu");
+	bool is_freebsd = !strcmp(os, "FreeBSD");
+
 	// mount devfs filesystem
 
 	#define IOV(name, val) \

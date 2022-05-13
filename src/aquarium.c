@@ -3,6 +3,10 @@
 //  - manual page
 //  - tests
 
+// building:
+// $ cc aquarium.c -larchive -lfetch -lcrypto -o aquarium
+// $ chmod u+s aquarium && chown root:wheel aquarium
+
 // create group:
 // $ pw groupadd stoners
 // $ pw groupmod stoners -g 420 -m obiwac
@@ -325,6 +329,8 @@ found:
 }
 
 static int do_create(void) {
+	// a few simple checks
+
 	if (!path) {
 		usage();
 	}
@@ -333,14 +339,26 @@ static int do_create(void) {
 		errx(EXIT_FAILURE, "%s template is illegal (starts with ILLEGAL_TEMPLATE_PREFIX, '%c'). Someone may be trying to swindle you!", template, ILLEGAL_TEMPLATE_PREFIX);
 	}
 
-	// open aquarium pointer file for writing
-	// TODO don't forget to fclose(fp) on each error here (in fact that's probably needed for many other FILE* objects around the codebase)
+	// generate final aquarium path
+
+	char* aquarium_path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
+	asprintf(&aquarium_path, AQUARIUMS_PATH "%s-XXXXXXX", template);
+	aquarium_path = mkdtemp(aquarium_path);
+
+	if (!aquarium_path) {
+		errx(EXIT_FAILURE, "mkdtemp: failed to create aquarium directory: %s", strerror(errno));
+	}
+
+	// write to aquarium pointer file
 
 	FILE* fp = fopen(path, "wx");
 
 	if (!fp) {
 		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", path, strerror(errno));
 	}
+
+	fprintf(fp, "%s", aquarium_path);
+	fclose(fp);
 
 	// setuid root
 
@@ -362,14 +380,6 @@ static int do_create(void) {
 
 	// make & change into final aquarium directory
 	// as per archive_write_disk(3)'s "BUGS" section, we mustn't call 'chdir' between opening and closing archive objects
-
-	char* aquarium_path; // don't care about freeing this
-	asprintf(&aquarium_path, AQUARIUMS_PATH "%s-XXXXXXX", template);
-	aquarium_path = mkdtemp(aquarium_path);
-
-	if (!aquarium_path) {
-		errx(EXIT_FAILURE, "mkdtemp: failed to create aquarium directory: %s", strerror(errno));
-	}
 
 	if (chdir(aquarium_path) < 0) {
 		errx(EXIT_FAILURE, "chdir: %s", strerror(errno));
@@ -420,10 +430,25 @@ static int do_create(void) {
 	// TODO copyfile: Operation not supported
 
 	system("cp /etc/resolv.conf etc/resolv.conf");
+	// execlp("cp", "cp", "/etc/resolv.conf", "etc/resolv.conf", NULL);
 
 	// if (copyfile("/etc/resolv.conf", "etc/resolv.conf", 0, COPYFILE_ALL) < 0) {
 	// 	errx(EXIT_FAILURE, "copyfile: %s", strerror(errno));
 	// }
+
+	// enter the newly created aquarium to do a bit of configuration
+	// we can't do this is all in C, because, well, there's a chance the template is not the operating system we're currently running
+	// this does thus depend a lot on the platform we're running on
+	// for the moment this is all hardcoded, but in all likelyhood, this will be in a script found somewhere in the aquarium template
+
+	if (chroot(aquarium_path) < 0) {
+		errx(EXIT_FAILURE, "chroot: %s", strerror(errno));
+	}
+
+	char* cmd;
+	asprintf(&cmd, "useradd obiwac -u 1001 -m -s /bin/bash && passwd -d obiwac && echo 'obiwac ALL=(ALL:ALL) ALL' >> /etc/sudoers");
+
+	system(cmd);
 
 	// TODO write info to aquarium database
 
@@ -433,19 +458,16 @@ static int do_create(void) {
 		errx(EXIT_FAILURE, "setuid: %s", strerror(errno));
 	}
 
-	fprintf(fp, "%s", aquarium_path);
-	fclose(fp);
-
 	return EXIT_SUCCESS;
 }
 
 static int do_enter(void) {
 	// read the aquarium pointer file
 
-	FILE* fp = fopen(path, "rb");
+	FILE* fp = fopen(path, "r");
 
 	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: %s", strerror(errno));
+		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", path, strerror(errno));
 	}
 
 	fseek(fp, 0, SEEK_END);

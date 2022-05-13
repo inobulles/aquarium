@@ -229,11 +229,14 @@ found:
 	fclose(fp);
 
 	// found template, start downloading it
+	// it's initially downloaded with a '.' prefix, because otherwise, there's a potential for a race condition
+	// e.g., if we downloaded it in its final destination, the template could be malicious, and an actor could coerce the user into creating an aquarium from that template before the checks have terminated
+	// realistically, there's a slim chance of this, unless said malicious actor could somehow stall the SHA256 digesting, but we shouldn't rely on this if we can help it
 
 	printf("Found template, downloading from %s ...\n", url);
 
 	char* path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
-	asprintf(&path, TEMPLATES_PATH "%s.txz", name);
+	asprintf(&path, TEMPLATES_PATH ".%s.txz", name);
 
 	/* FILE* */ fp = fopen(path, "w");
 
@@ -290,16 +293,30 @@ found:
 	}
 
 	// template has been downloaded, check its size & SHA256 hash
-	// TODO between when the template is downloaded and all checks have finished, there's a potential for a race condition in which the template is malicious but still on the file system in the right place
-	//      a simple solution to this would be to download the template with a different name, e.g. a '.' before it, such that 'aquarium' knows its currently unsafe to read
-	//      then, once all checks have passed, the '.' infront of the template may be removed
 
 	if (total != bytes) {
+		if (remove(path) < 0) {
+			errx(EXIT_FAILURE, "remove: failed to remove %s: %s", path, strerror(errno));
+		}
+
 		errx(EXIT_FAILURE, "Total size of downloaded template (%zu bytes) is not the size expected (%zu bytes)", total, bytes);
 	}
 
 	if (strcmp(hash_hex, sha256)) {
+		if (remove(path) < 0) {
+			errx(EXIT_FAILURE, "remove: failed to remove %s: %s", path, strerror(errno));
+		}
+
 		errx(EXIT_FAILURE, "SHA256 hash of downloaded template (%s) is not the same as expected (%s)", hash_hex, sha256);
+	}
+
+	// checks have succeeded; move temporary file to permanent position
+
+	char* final_path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
+	asprintf(&final_path, TEMPLATES_PATH "%s.txz", name);
+
+	if (rename(path, final_path) < 0) {
+		errx(EXIT_FAILURE, "rename: failed to rename %s to %s: %s", path, final_path, strerror(errno));
 	}
 
 	exit(0);
@@ -332,7 +349,7 @@ static int do_create(void) {
 	char* template_path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
 	asprintf(&template_path, TEMPLATES_PATH "%s.txz", template);
 
-	if (access(template_path, R_OK)) {
+	if (access(template_path, R_OK) < 0) {
 		// file template doesn't yet exist; download & check it
 		__download_template(template);
 	}

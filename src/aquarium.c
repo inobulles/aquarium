@@ -117,6 +117,43 @@ static void __dead2 usage(void) {
 	exit(EXIT_FAILURE);
 }
 
+// utility functions
+
+typedef enum {
+	OS_GENERIC, OS_FBSD, OS_LINUX
+} os_info_t;
+
+static inline os_info_t __retrieve_os_info(void) {
+	// this method of retrieving OS info relies on the existence of an /etc/os-release file on the installation
+	// all officially supported OS' for aquariums should have this file, else they'll simply be reported as 'OS_GENERIC'
+
+	FILE* fp = fopen("etc/os-release", "r");
+
+	if (!fp) {
+		return OS_GENERIC;
+	}
+
+	char buf[256];
+	char* os = fgets(buf, sizeof buf, fp);
+
+	os += strlen("NAME=\"");
+	os[strlen(os) - 2] = '\0';
+
+	fclose(fp);
+
+	// match NAME with an OS we know of
+
+	if (!strcmp(os, "FreeBSD")) {
+		return OS_FBSD;
+	}
+
+	if (!strcmp(os, "Ubuntu")) {
+		return OS_LINUX;
+	}
+
+	return OS_GENERIC;
+}
+
 // actions
 
 static int do_list(void) {
@@ -430,7 +467,6 @@ static int do_create(void) {
 	// TODO copyfile: Operation not supported
 
 	system("cp /etc/resolv.conf etc/resolv.conf");
-	// execlp("cp", "cp", "/etc/resolv.conf", "etc/resolv.conf", NULL);
 
 	// if (copyfile("/etc/resolv.conf", "etc/resolv.conf", 0, COPYFILE_ALL) < 0) {
 	// 	errx(EXIT_FAILURE, "copyfile: %s", strerror(errno));
@@ -441,14 +477,15 @@ static int do_create(void) {
 	// this does thus depend a lot on the platform we're running on
 	// for the moment this is all hardcoded, but in all likelyhood, this will be in a script found somewhere in the aquarium template
 
+	os_info_t os = __retrieve_os_info();
+
 	if (chroot(aquarium_path) < 0) {
 		errx(EXIT_FAILURE, "chroot: %s", strerror(errno));
 	}
 
-	char* cmd;
-	asprintf(&cmd, "useradd obiwac -u 1001 -m -s /bin/bash && passwd -d obiwac && echo 'obiwac ALL=(ALL:ALL) ALL' >> /etc/sudoers");
-
-	system(cmd);
+	if (os == OS_LINUX) {
+		system("useradd obiwac -u 1001 -m -s /bin/bash && passwd -d obiwac && echo 'obiwac ALL=(ALL:ALL) ALL' >> /etc/sudoers");
+	}
 
 	// TODO write info to aquarium database
 
@@ -496,25 +533,6 @@ static int do_enter(void) {
 		errx(EXIT_FAILURE, "setuid: %s", strerror(errno));
 	}
 
-	// retrieve information about the OS running in the aquarium
-
-	FILE* os_release = fopen("etc/os-release", "r");
-
-	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open aquarium /etc/os-release file: %s", strerror(errno));
-	}
-
-	char buf[256];
-	char* os = fgets(buf, sizeof buf, os_release);
-
-	os += strlen("NAME=\"");
-	os[strlen(os) - 2] = '\0';
-
-	fclose(os_release);
-
-	bool is_linux = !strcmp(os, "Ubuntu");
-	bool is_freebsd = !strcmp(os, "FreeBSD");
-
 	// mount devfs filesystem
 
 	#define IOV(name, val) \
@@ -545,35 +563,11 @@ static int do_enter(void) {
 		errx(EXIT_FAILURE, "nmount: failed to mount tmpfs: %s", strerror(errno));
 	}
 
-	// are we running a Linux aquarium?
+	// OS-specific actions
 
-	if (is_linux) {
-		// mount linprocfs
+	os_info_t os = __retrieve_os_info();
 
-		struct iovec iov_proc[] = {
-			IOV("fstype", "linprocfs"),
-			IOV("fspath", "proc"),
-		};
-
-		if (nmount(iov_proc, sizeof(iov_proc) / sizeof(*iov_proc), 0) < 0) {
-			errx(EXIT_FAILURE, "nmount: failed to mount linprocfs: %s", strerror(errno));
-		}
-
-		// mount linsysfs
-
-		struct iovec iov_sys[] = {
-			IOV("fstype", "linsysfs"),
-			IOV("fspath", "sys"),
-		};
-
-		if (nmount(iov_sys, sizeof(iov_sys) / sizeof(*iov_sys), 0) < 0) {
-			errx(EXIT_FAILURE, "nmount: failed to mount linsysfs: %s", strerror(errno));
-		}
-	}
-
-	// are we running a FreeBSD aquarium?
-
-	if (is_freebsd) {
+	if (os == OS_FBSD) {
 		// mount procfs
 
 		struct iovec iov_proc[] = {
@@ -594,6 +588,30 @@ static int do_enter(void) {
 
 		if (nmount(iov_sys, sizeof(iov_sys) / sizeof(*iov_sys), 0) < 0) {
 			errx(EXIT_FAILURE, "nmount: failed to mount sysfs: %s", strerror(errno));
+		}
+	}
+
+	else if (os == OS_LINUX) {
+		// mount linprocfs
+
+		struct iovec iov_proc[] = {
+			IOV("fstype", "linprocfs"),
+			IOV("fspath", "proc"),
+		};
+
+		if (nmount(iov_proc, sizeof(iov_proc) / sizeof(*iov_proc), 0) < 0) {
+			errx(EXIT_FAILURE, "nmount: failed to mount linprocfs: %s", strerror(errno));
+		}
+
+		// mount linsysfs
+
+		struct iovec iov_sys[] = {
+			IOV("fstype", "linsysfs"),
+			IOV("fspath", "sys"),
+		};
+
+		if (nmount(iov_sys, sizeof(iov_sys) / sizeof(*iov_sys), 0) < 0) {
+			errx(EXIT_FAILURE, "nmount: failed to mount linsysfs: %s", strerror(errno));
 		}
 	}
 

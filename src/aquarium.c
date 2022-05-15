@@ -551,13 +551,12 @@ static int do_create(void) {
 	archive_read_free(archive);
 
 	// copy over /etc/resolv.conf for networking to, well, work
-	// TODO copyfile: Operation not supported
 
-	system("cp /etc/resolv.conf etc/resolv.conf");
+	#define COPYFILE_DEBUG (1 << 31)
 
-	// if (copyfile("/etc/resolv.conf", "etc/resolv.conf", 0, COPYFILE_ALL) < 0) {
-	// 	errx(EXIT_FAILURE, "copyfile: %s", strerror(errno));
-	// }
+	if (copyfile("/etc/resolv.conf", "etc/resolv.conf", 0, COPYFILE_ALL) < 0) {
+		errx(EXIT_FAILURE, "copyfile: %s", strerror(errno));
+	}
 
 	// write info to aquarium database
 
@@ -800,12 +799,15 @@ found:
 	}
 
 	// actually chroot
+	// PROC_NO_NEW_PRIVS_ENABLE is only available in aquaBSD and FreeBSD-CURRENT: https://reviews.freebsd.org/D30939
 
-	// int flag = PROC_NO_NEW_PRIVS_ENABLE;
+	#if __FreeBSD_version >= 1400026
+		int flag = PROC_NO_NEW_PRIVS_ENABLE;
 
-	// if (procctl(P_PID, getpid(), PROC_NO_NEW_PRIVS_CTL, &flag) < 0) {
-	// 	errx(EXIT_FAILURE, "procctl: %s", strerror(errno));
-	// }
+		if (procctl(P_PID, getpid(), PROC_NO_NEW_PRIVS_CTL, &flag) < 0) {
+			errx(EXIT_FAILURE, "procctl: %s", strerror(errno));
+		}
+	#endif
 
 	struct passwd* passwd = getpwuid(uid); // this must come before the chroot
 
@@ -813,22 +815,7 @@ found:
 		errx(EXIT_FAILURE, "chroot: %s", strerror(errno));
 	}
 
-	// if (setuid(uid) < 0) {
-	// 	errx(EXIT_FAILURE, "setuid: %s", strerror(errno));
-	// }
-
-	// char* shell = NULL; // getenv("SHELL");
-
-	// if (!shell) {
-	// 	shell = _PATH_BSHELL; // /bin/sh
-	// }
-
-	// execlp(shell, shell, "-i", NULL);
-	// errx(EXIT_FAILURE, "%s: %s", shell, strerror(errno));
-
 	execlp("su", "su", "-", passwd->pw_name, NULL);
-	// execlp("/bin/login", "/bin/login", "obiwac", NULL);
-
 	return EXIT_SUCCESS;
 }
 

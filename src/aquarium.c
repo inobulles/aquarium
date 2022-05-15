@@ -132,6 +132,112 @@ static inline os_info_t __retrieve_os_info(void) {
 	return OS_GENERIC;
 }
 
+typedef struct {
+	char* pointer_path;
+	char* aquarium_path;
+} db_ent_t;
+
+static bool next_db_ent(db_ent_t* ent, size_t buf_len, char buf[buf_len], FILE* fp, bool be_dramatic) {
+	char* line = fgets(buf, buf_len, fp);
+
+	if (!line) {
+		return false;
+	}
+
+	// remove potential trailing newline
+
+	size_t end_i = strlen(line) - 1;
+
+	if (line[end_i] == '\n') {
+		line[end_i] = '\0';
+	}
+
+	// parse tokens
+
+	char* pointer_path  = strsep(&line, ":");
+	char* aquarium_path = strsep(&line, ":");
+
+	if (be_dramatic && (!pointer_path || !aquarium_path)) {
+		errx(EXIT_FAILURE, "Aquarium database file %s has an invalid format", AQUARIUM_DB_PATH);
+	}
+
+	ent->pointer_path  = pointer_path;
+	ent->aquarium_path = aquarium_path;
+
+	return true;
+}
+
+static inline int __wait_for_process(pid_t pid) {
+	int wstatus = 0;
+	while (waitpid(pid, &wstatus, 0) > 0);
+
+	if (WIFSIGNALED(wstatus)) {
+		return -1;
+	}
+
+	if (WIFEXITED(wstatus)) {
+		return WEXITSTATUS(wstatus);
+	}
+
+	return -1;
+}
+
+// actions
+
+static int do_list(void) {
+	DIR* dp = opendir(TEMPLATES_PATH);
+
+	if (!dp) {
+		errx(EXIT_FAILURE, "opendir: failed to open template directory %s: %s", TEMPLATES_PATH, strerror(errno));
+	}
+
+	printf("ARCH\tOS\tVERS\n");
+
+	struct dirent* ent;
+
+	while ((ent = readdir(dp))) {
+		char* name = ent->d_name;
+
+		if (!strcmp(name, ".") || !strcmp(name, "..")) {
+			continue;
+		}
+
+		enum {
+			ARCH, OS, VERS, SENTINEL
+		} kind = 0;
+
+		char* tok;
+
+		while ((tok = strsep(&name, "."))) {
+			printf("%s", tok);
+
+			if (++kind >= SENTINEL) {
+				break;
+			}
+
+			printf("\t");
+		}
+
+		printf("\n");
+	}
+
+	closedir(dp);
+
+	return EXIT_FAILURE;
+}
+
+// creating aquariums (takes in a template name):
+//  - check if template exists
+//  - open pointer file for writing
+//  - setuid root
+//  - extract template in some aquariums folder if it exists
+//  - if it doesn't, first download it, and compare hashed to a database of trusted templates to make sure there isn't anything weird going on
+//  - create user and stuff
+//  - do any final setup (e.g. copying '/etc/resolv.conf' for networking)
+//  - write path of pointer file & its associated aquarium to aquarium database (and give it some unique ID)
+//  - setuid user (CHECK FOR ERRORS!)
+//  - write unique ID to pointer file
+
 static inline void __download_template(const char* template) {
 	// read list of sanctioned templates, and see if we have a match
 
@@ -309,112 +415,6 @@ found:
 		errx(EXIT_FAILURE, "rename: failed to rename %s to %s: %s", path, final_path, strerror(errno));
 	}
 }
-
-typedef struct {
-	char* pointer_path;
-	char* aquarium_path;
-} db_ent_t;
-
-static bool next_db_ent(db_ent_t* ent, size_t buf_len, char buf[buf_len], FILE* fp, bool be_dramatic) {
-	char* line = fgets(buf, buf_len, fp);
-
-	if (!line) {
-		return false;
-	}
-
-	// remove potential trailing newline
-
-	size_t end_i = strlen(line) - 1;
-
-	if (line[end_i] == '\n') {
-		line[end_i] = '\0';
-	}
-
-	// parse tokens
-
-	char* pointer_path  = strsep(&line, ":");
-	char* aquarium_path = strsep(&line, ":");
-
-	if (be_dramatic && (!pointer_path || !aquarium_path)) {
-		errx(EXIT_FAILURE, "Aquarium database file %s has an invalid format", AQUARIUM_DB_PATH);
-	}
-
-	ent->pointer_path  = pointer_path;
-	ent->aquarium_path = aquarium_path;
-
-	return true;
-}
-
-static inline int __wait_for_process(pid_t pid) {
-	int wstatus = 0;
-	while (waitpid(pid, &wstatus, 0) > 0);
-
-	if (WIFSIGNALED(wstatus)) {
-		return -1;
-	}
-
-	if (WIFEXITED(wstatus)) {
-		return WEXITSTATUS(wstatus);
-	}
-
-	return -1;
-}
-
-// actions
-
-static int do_list(void) {
-	DIR* dp = opendir(TEMPLATES_PATH);
-
-	if (!dp) {
-		errx(EXIT_FAILURE, "opendir: failed to open template directory %s: %s", TEMPLATES_PATH, strerror(errno));
-	}
-
-	printf("ARCH\tOS\tVERS\n");
-
-	struct dirent* ent;
-
-	while ((ent = readdir(dp))) {
-		char* name = ent->d_name;
-
-		if (!strcmp(name, ".") || !strcmp(name, "..")) {
-			continue;
-		}
-
-		enum {
-			ARCH, OS, VERS, SENTINEL
-		} kind = 0;
-
-		char* tok;
-
-		while ((tok = strsep(&name, "."))) {
-			printf("%s", tok);
-
-			if (++kind >= SENTINEL) {
-				break;
-			}
-
-			printf("\t");
-		}
-
-		printf("\n");
-	}
-
-	closedir(dp);
-
-	return EXIT_FAILURE;
-}
-
-// creating aquariums (takes in a template name):
-//  - check if template exists
-//  - open pointer file for writing
-//  - setuid root
-//  - extract template in some aquariums folder if it exists
-//  - if it doesn't, first download it, and compare hashed to a database of trusted templates to make sure there isn't anything weird going on
-//  - create user and stuff
-//  - do any final setup (e.g. copying '/etc/resolv.conf' for networking)
-//  - write path of pointer file & its associated aquarium to aquarium database (and give it some unique ID)
-//  - setuid user (CHECK FOR ERRORS!)
-//  - write unique ID to pointer file
 
 static int do_create(void) {
 	// a few simple checks
@@ -820,6 +820,35 @@ found:
 //  - if a valid pointer file doesn't exist at the path in the database, we say the aquarium has been "orphaned"
 //  - if an aquarium is orphaned, we can safely delete it and remove it from the aquarium database
 
+static void __remove_aquarium(char* aquarium_path) {
+	if (chdir(aquarium_path) < 0) {
+		errx(EXIT_FAILURE, "chdir: %s", strerror(errno));
+	}
+
+	// first, we make sure all possible mounted filesystems are unmounted (we do this all twice for a bit of encouragement)
+	// things may go wrong unmounting, but that's a problem we can delegate to the subsequent rm call
+	// similarly, the aquarium may have already been deleted (e.g. by a nosy user)
+	// so we don't wanna do anything with the return value of '__wait_for_process'
+
+	for (int i = 0; i < 2; i++) {
+		unmount("dev",  MNT_FORCE);
+		unmount("proc", MNT_FORCE);
+		unmount("sys",  MNT_FORCE);
+		unmount("tmp",  MNT_FORCE);
+	}
+
+	// then, we remove all the aquarium files
+
+	pid_t rm_pid = fork();
+
+	if (!rm_pid) {
+		execl("/bin/rm", "/bin/rm", "-rf", aquarium_path, NULL);
+		_exit(EXIT_FAILURE);
+	}
+
+	__wait_for_process(rm_pid);
+}
+
 static int do_sweep(void) {
 	// list of database entries which survive the sweep
 
@@ -846,38 +875,12 @@ static int do_sweep(void) {
 			continue;
 		}
 
-		// change into the aquarium's path right off the bat
-		// this'll make a lot of following operations much easier
-
-		if (chdir(ent.aquarium_path) < 0) {
-			errx(EXIT_FAILURE, "chdir: %s", strerror(errno));
-		}
-
 		// if we can't find pointer file, remove the aquarium and that entry from the aquarium database
 		// TODO I desperately need some easy API for removing files in the standard library on aquaBSD
 		//      I'm not (I hope) dumb enough to do something like 'asprint(&cmd, "rm -rf %s", ent.aquarium_path)', but I know damn well other developers would be tempted to do such a thing given no other alternative
 
 		if (access(ent.pointer_path, R_OK) < 0) {
-			// first, we make sure all possible mounted filesystems are unmounted
-			// things may go wrong unmounting, but that's a problem we can delegate to the subsequent rm call
-			// similarly, the aquarium may have already been deleted (e.g. by a nosy user)
-			// so we don't wanna do anything with the return value of '__wait_for_process'
-
-			unmount("dev",  MNT_FORCE);
-			unmount("proc", MNT_FORCE);
-			unmount("sys",  MNT_FORCE);
-			unmount("tmp",  MNT_FORCE);
-
-			// then, we remove all the aquarium files
-
-			pid_t rm_pid = fork();
-
-			if (!rm_pid) {
-				execl("/bin/rm", "/bin/rm", "-rf", ent.aquarium_path, NULL);
-				_exit(EXIT_FAILURE);
-			}
-
-			__wait_for_process(rm_pid);
+			__remove_aquarium(ent.aquarium_path);
 
 			// discard this entry obviously, we don't want nuffin to do with it no more 😡
 
@@ -910,7 +913,50 @@ static int do_sweep(void) {
 
 	fclose(fp);
 
-	// rebuild new aquarium database file with the entries that survived
+	// keep things nice and clean is to go through everything under /etc/aquariums/aquariums and see which aquariums were never "recensés" (censused?)
+
+	DIR* dp = opendir(AQUARIUMS_PATH);
+
+	if (!dp) {
+		errx(EXIT_FAILURE, "opendir: %s", strerror(errno));
+	}
+
+	struct dirent* dir_ent;
+
+	while ((dir_ent = readdir(dp))) {
+		char* name = dir_ent->d_name;
+
+		if (!strcmp(name, ".") || !strcmp(name, "..")) {
+			continue;
+		}
+
+		for (size_t i = 0; i < survivors_len; i++) {
+			db_ent_t* survivor = &survivors[i];
+			char* aquarium = strrchr(survivor->aquarium_path, '/');
+
+			aquarium += !!*aquarium;
+
+			if (!strcmp(aquarium, name)) {
+				goto found;
+			}
+		}
+
+		// ah! couldn't find the aquarium in the list of survivors! remove it!
+
+		char* aquarium_path;
+		asprintf(&aquarium_path, "%s/%s", AQUARIUMS_PATH, name);
+
+		__remove_aquarium(aquarium_path);
+		free(aquarium_path);
+
+	found:
+
+		continue; // need something after a label in C for some reason
+	}
+
+	closedir(dp);
+
+	// last thing to do is rebuild new aquarium database file with the entries that survived
 
 	/* FILE* */ fp = fopen(AQUARIUM_DB_PATH, "w");
 

@@ -17,4 +17,4 @@ ranlib bin/libbob.a
 
 # create shared library
 
-ld -shared bin/libbob.o -o bin/libbob.so
+cc -shared bin/libbob.o -o bin/libbob.so

@@ -486,6 +486,7 @@ static int do_create(void) {
 	}
 
 	if (os == OS_LINUX) {
+		// for that sudo problem, see: https://askubuntu.com/questions/59458/error-message-sudo-unable-to-resolve-host-none
 		system("useradd obiwac -u 1001 -m -s /bin/bash && passwd -d obiwac && echo 'obiwac ALL=(ALL:ALL) ALL' >> /etc/sudoers");
 	}
 

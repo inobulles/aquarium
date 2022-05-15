@@ -1,3 +1,6 @@
+dist/
+out/
 bin/
-*.core
+rootfs/
 *.out
+*.core

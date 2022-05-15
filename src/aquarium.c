@@ -411,6 +411,21 @@ static bool next_db_ent(db_ent_t* ent, size_t buf_len, char buf[buf_len], FILE* 
 	return true;
 }
 
+static inline int __wait_for_process(pid_t pid) {
+	int wstatus = 0;
+	while (waitpid(pid, &wstatus, 0) > 0);
+
+	if (WIFSIGNALED(wstatus)) {
+		return -1;
+	}
+
+	if (WIFEXITED(wstatus)) {
+		return WEXITSTATUS(wstatus);
+	}
+
+	return -1;
+}
+
 static int do_create(void) {
 	// a few simple checks
 
@@ -560,26 +575,71 @@ static int do_create(void) {
 	// enter the newly created aquarium to do a bit of configuration
 	// we can't do this is all in C, because, well, there's a chance the template is not the operating system we're currently running
 	// this does thus depend a lot on the platform we're running on
-	// TODO for the moment this is all hardcoded, but in all likelyhood, this will be in a script found somewhere in the aquarium template
-	//      this could probably be quite easy if all the aquarium info was passed as a standard set of environment variables or something
-	//      the only problem with having a script in the aquarium, is that images must be built with the knowledge they may be run in an aquarium
-	// TODO fork the process and chroot into the *child*
-	//      then, wait for it to finish in the parent
-	//      take a look at how all this works out security-wise wrt setuid
+	// the solution here is to generate an initial setup script depending on the aquarium's OS, which we then run in a chroot in the aquarium
 
-	os_info_t os = __retrieve_os_info();
+	size_t hostname_len = sysconf(_SC_HOST_NAME_MAX);
+	char hostname[hostname_len + 1];
 
-	if (chroot(aquarium_path) < 0) {
-		errx(EXIT_FAILURE, "chroot: %s", strerror(errno));
+	if (gethostname(hostname, sizeof hostname)) {
+		errx(EXIT_FAILURE, "gethostname: %s", strerror(errno));
 	}
 
+	struct passwd* passwd = getpwuid(uid);
+	char* username = passwd->pw_name;
+
+	os_info_t os = __retrieve_os_info();
+	char* setup_script_fmt;
+
+	#define SETUP_SCRIPT_HEADER \
+		"#!/bin/sh\n" \
+		"set -e;" \
+		\
+		"username=%s;" \
+		"uid=%d;" \
+		"hostname=%s;" \
+		\
+		"echo $hostname > /etc/hostname;" \
+		"echo 127.0.0.1 $hostname >> /etc/hosts;"
+
 	if (os == OS_LINUX) {
-		// for that sudo problem, see: https://askubuntu.com/questions/59458/error-message-sudo-unable-to-resolve-host-none
-		system("useradd obiwac -u 1001 -m -s /bin/bash && passwd -d obiwac && echo 'obiwac ALL=(ALL:ALL) ALL' >> /etc/sudoers");
+		setup_script_fmt = SETUP_SCRIPT_HEADER
+			"useradd $username -u $uid -m -s /bin/bash;"
+			"passwd -d $username;"
+			"echo $username 'ALL=(ALL:ALL) ALL' >> /etc/sudoers;";
 	}
 
 	else {
-		system("pw useradd obiwac -u 1001 -m -s /bin/sh -G wheel -w none");
+		setup_script_fmt = SETUP_SCRIPT_HEADER
+			"pw useradd $username -u $uid -m -s /bin/sh -G wheel -w none;";
+	}
+
+	char* setup_script;
+	asprintf(&setup_script, setup_script_fmt, username, uid, hostname);
+
+	// fork the process and chroot into the child to run that initial setup script
+	// then, wait for it to finish parent-side (and check for errors blah blah)
+	// TODO take a look at how all this works out security-wise wrt setuid
+
+	pid_t chroot_pid = fork();
+
+	if (!chroot_pid) {
+		// child process here
+
+		if (chroot(aquarium_path) < 0) {
+			errx(EXIT_FAILURE, "chroot: %s", strerror(errno));
+		}
+
+		execl("/bin/sh", "/bin/sh", "-c", setup_script, NULL);
+
+		// this condition should never be reached
+
+		exit(1);
+	}
+
+	int child_rv = __wait_for_process(chroot_pid);
+
+	if (child_rv < 0) {
+		errx(EXIT_FAILURE, "Child chroot process exited with error code %d", child_rv);
 	}
 
 	// finish writing pointer file as user

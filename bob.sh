@@ -70,6 +70,7 @@ fi
 
 cp /etc/resolv.conf $rootfs/etc/resolv.conf # so that DNS works in chroot
 touch $rootfs/dev/null # to stop pkg-static from complaining
+chroot $rootfs /etc/rc.d/os-release start # generate /etc/os-release
 
 chroot $rootfs /bin/sh < custom.sh
 

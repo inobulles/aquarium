@@ -605,7 +605,10 @@ static int do_create(void) {
 		setup_script_fmt = SETUP_SCRIPT_HEADER
 			"useradd $username -u $uid -m -s /bin/bash;"
 			"passwd -d $username;"
-			"echo $username 'ALL=(ALL:ALL) ALL' >> /etc/sudoers;";
+			"echo $username 'ALL=(ALL:ALL) ALL' >> /etc/sudoers;"
+
+			"echo APT::Cache-Start \\\"100000000\\\"\\; >> /etc/apt/apt.conf.d/10cachestart;"
+			"sed -i 's/$/\\ universe/' /etc/apt/sources.list;";
 	}
 
 	else {

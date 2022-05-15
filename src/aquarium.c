@@ -211,29 +211,35 @@ static inline void __download_template(const char* template) {
 	char* line;
 
 	char* name;
+	char* protocol;
 	char* url;
 	size_t bytes;
 	char* sha256;
 
 	while ((line = fgets(buf, sizeof buf, fp))) { // fgets reads one less than 'size', so we're fine just padding 'sizeof buf'
 		enum {
-			NAME, URL, BYTES, SHA256, SENTINEL
+			NAME, PROTOCOL, URL, BYTES, SHA256, SENTINEL
 		} kind = 0;
 
 		name = NULL;
+		protocol = NULL;
 		url = NULL;
 		bytes = 0;
 		sha256 = NULL;
 
 		char* tok;
 
-		while ((tok = strsep(&line, " "))) {
+		while ((tok = strsep(&line, ":"))) {
 			if (kind == NAME) {
 				name = tok;
 
 				if (strcmp(name, template)) {
 					goto next;
 				}
+			}
+
+			else if (kind == PROTOCOL) {
+				protocol = tok;
 			}
 
 			else if (kind == URL) {
@@ -278,7 +284,10 @@ found:
 	// e.g., if we downloaded it in its final destination, the template could be malicious, and an actor could coerce the user into creating an aquarium from that template before the checks have terminated
 	// realistically, there's a slim chance of this, unless said malicious actor could somehow stall the SHA256 digesting, but we shouldn't rely on this if we can help it
 
-	printf("Found template, downloading from %s ...\n", url);
+	char* composed_url;
+	asprintf(&composed_url, "%s://%s", protocol, url);
+
+	printf("Found template, downloading from %s ...\n", composed_url);
 
 	char* path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
 	asprintf(&path, TEMPLATES_PATH "%c%s.txz", ILLEGAL_TEMPLATE_PREFIX, name);
@@ -289,12 +298,14 @@ found:
 		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", path, strerror(errno));
 	}
 
-	FILE* fetch_fp = fetchGetURL(url, "");
+	FILE* fetch_fp = fetchGetURL(composed_url, "");
 
 	if (!fetch_fp) {
 		fclose(fp);
-		errx(EXIT_FAILURE, "Failed to download %s", url);
+		errx(EXIT_FAILURE, "Failed to download %s", composed_url);
 	}
+
+	free(composed_url);
 
 	// checking (size & hash) stuff
 
@@ -387,8 +398,8 @@ static bool next_db_ent(db_ent_t* ent, size_t buf_len, char buf[buf_len], FILE* 
 
 	// parse tokens
 
-	char* pointer_path  = strsep(&line, " ");
-	char* aquarium_path = strsep(&line, " ");
+	char* pointer_path  = strsep(&line, ":");
+	char* aquarium_path = strsep(&line, ":");
 
 	if (!pointer_path || !aquarium_path) {
 		errx(EXIT_FAILURE, "Aquarium database file %s has an invalid format", AQUARIUM_DB_PATH);
@@ -541,7 +552,7 @@ static int do_create(void) {
 		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", AQUARIUM_DB_PATH, strerror(errno));
 	}
 
-	fprintf(fp, "%s %s\n", abs_path, aquarium_path);
+	fprintf(fp, "%s:%s\n", abs_path, aquarium_path);
 
 	free(abs_path);
 	fclose(fp);

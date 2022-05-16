@@ -116,6 +116,7 @@ static void __dead2 usage(void) {
 		"usage: %1$s [-v]\n"
 		"       %1$s [-v] -c path [-t template]\n"
 		"       %1$s [-v] -e path\n"
+		"       %1$s [-v] -l\n"
 		"       %1$s [-v] -s\n",
 	getprogname());
 
@@ -212,6 +213,27 @@ static inline int __wait_for_process(pid_t pid) {
 // actions
 
 static int do_list(void) {
+	FILE* fp = fopen(AQUARIUM_DB_PATH, "r");
+
+	if (!fp) {
+		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", AQUARIUM_DB_PATH, strerror(errno));
+	}
+
+	printf("POINTER\tAQUARIUM\n");
+
+	char buf[1024];
+	db_ent_t ent;
+
+	while (next_db_ent(&ent, sizeof buf, buf, fp, true)) {
+		printf("%s\t%s\n", ent.pointer_path, ent.aquarium_path);
+	}
+
+	fclose(fp);
+
+	return EXIT_SUCCESS;
+}
+
+static int do_list_templates(void) {
 	DIR* dp = opendir(TEMPLATES_PATH);
 
 	if (!dp) {
@@ -250,7 +272,7 @@ static int do_list(void) {
 
 	closedir(dp);
 
-	return EXIT_FAILURE;
+	return EXIT_SUCCESS;
 }
 
 // creating aquariums (takes in a template name):
@@ -882,8 +904,7 @@ found:
 	// unfortunately we kinda need to use execlp here
 	// different OS' may have different locations for the su binary
 
-	execlp("su", "su", "-", passwd->pw_name, NULL);
-	return EXIT_SUCCESS;
+	return execlp("su", "su", "-", passwd->pw_name, NULL);
 }
 
 // sweeping aquariums (takes in nothing):
@@ -1063,7 +1084,7 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:e:st:v")) != -1) {
+	while ((c = getopt(argc, argv, "c:e:lst:v")) != -1) {
 		// general options
 
 		if (c == 'v') {
@@ -1080,6 +1101,10 @@ int main(int argc, char* argv[]) {
 		else if (c == 'e') {
 			action = do_enter;
 			path = optarg;
+		}
+
+		else if (c == 'l') {
+			action = do_list_templates;
 		}
 
 		else if (c == 's') {

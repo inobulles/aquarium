@@ -773,6 +773,18 @@ found:
 			errx(EXIT_FAILURE, "nmount: failed to mount shm tmpfs: %s", strerror(errno));
 		}
 
+		// mount fdescfs (with linrdlnk)
+
+		struct iovec iov_fd[] = {
+			IOV("fstype", "fdescfs"),
+			IOV("fspath", "dev/fd"),
+			IOV("linrdlnk", ""),
+		};
+
+		if (nmount(iov_fd, sizeof(iov_fd) / sizeof(*iov_fd), 0) < 0) {
+			errx(EXIT_FAILURE, "nmount: failed to mount fdescfs: %s", strerror(errno));
+		}
+
 		// mount linprocfs
 
 		struct iovec iov_proc[] = {
@@ -797,6 +809,17 @@ found:
 	}
 
 	else {
+		// mount fdescfs
+
+		struct iovec iov_fd[] = {
+			IOV("fstype", "fdescfs"),
+			IOV("fspath", "dev/fd"),
+		};
+
+		if (nmount(iov_fd, sizeof(iov_fd) / sizeof(*iov_fd), 0) < 0) {
+			errx(EXIT_FAILURE, "nmount: failed to mount fdescfs: %s", strerror(errno));
+		}
+
 		// mount procfs
 
 		struct iovec iov_proc[] = {

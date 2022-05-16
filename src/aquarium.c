@@ -3,6 +3,8 @@
 //  - manual page
 //  - tests
 //  - option for listing aquarium database
+//  - better way of copying over linux-nvidia-libs (probably best to build the package in a way which assumes it's installing to a Linux install right off the bat, and then have some kind of aquarium mechanism to install packages like 'aquarium -p my-aquarium linux-nvidia-libs-510.39.01.pkg' or something)
+//  - better solution than the 'compat.linux.emul_path' sysctl from FreeBSD, because that's super limited
 
 // building:
 // $ cc aquarium.c -larchive -lfetch -lcrypto -o aquarium
@@ -20,6 +22,30 @@
 // recovering aquariums (takes in nothing):
 //  - since we keep a record of all the pointer files, we can actually recover them if a user accidentally deletes one
 //  - basically, follow the same steps, except if an aquarium is orphaned, regenerate its pointer file instead of deleting the aquarium and its database entry
+
+// at this point, things seem to be working well enough to run full Linux apps quite well in aquariums
+// here's a little tutorial of sorts for installing Chrome
+// first, we need to create an Ubuntu aquarium and enter it:
+// % aquarium -c ubuntu-aquarium -t amd64.ubuntu.focal
+// % aquarium -e ubuntu-aquarium
+// now we're in our Ubuntu aquarium, install a few things we'll need:
+// % sudo apt install -y curl gpg
+// once that's done, add the Google Chrome repository to APT sources & Google's signing key for Linux:
+// % echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+// % curl https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+// % sudo apt update
+// finally (at least for inside of the aquarium), install Chrome itself and exit:
+// % sudo apt install -y google-chrome-stable
+// % exit
+// for hardware acceleration (on NVIDIA), we need to copy over the Linux libraries from the .run file to the aquarium
+// fortunately, there's already a 'linux-nvidia-libs' package which contains these libraries for aquaBSD: https://github.com/inobulles/aquabsd-pkg-repo/releases/
+// extract that and copy over the libraries to the aquarium (this is a very un-proper way of doing things, but whatever):
+// % tar xzvf linux-nvidia-libs-510.39.01.pkg
+// % cp -r compat/linux/usr/lib64/* $aquarium_path/lib/x86_64-linux-gnu
+// and after all that, you should finally be able to set the Linux emulation path and launch Chrome:
+// % sysctl compat.linux.emul_path=$aquarium_path
+// % $aquarium_path/opt/google/chrome/chrome --no-sandbox --enable-features=VaapiVideoDecoder
+// navigate to 'chrome://gpu' and verify that everything is working correctly
 
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");

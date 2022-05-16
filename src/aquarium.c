@@ -2,6 +2,7 @@
 //  - factor out a libaquarium library from the aquarium frontend
 //  - manual page
 //  - tests
+//  - option for listing aquarium database
 
 // building:
 // $ cc aquarium.c -larchive -lfetch -lcrypto -o aquarium
@@ -596,6 +597,8 @@ static int do_create(void) {
 			"passwd -d $username;"
 			"echo $username 'ALL=(ALL:ALL) ALL' >> /etc/sudoers;"
 
+			// fix APT defaults
+
 			"echo APT::Cache-Start \\\"100000000\\\"\\; >> /etc/apt/apt.conf.d/10cachestart;"
 			"sed -i 's/$/\\ universe/' /etc/apt/sources.list;";
 	}
@@ -734,19 +737,21 @@ found:
 		errx(EXIT_FAILURE, "nmount: failed to mount devfs: %s", strerror(errno));
 	}
 
-	// mount tmpfs filesystem
+	// mount nullfs filesystem for /tmp
+	// this will link the contents of /tmp between the aquarium and the host
 	// we don't wanna overwrite anything potentially already inside of /tmp
 	// to do that, the manual (nmount(2)) suggests we use the MNT_EMPTYDIR flag
 	// there seem to be a few inconsistencies vis-à-vis the type of 'flags', so instead we can simply use the 'emptydir' iov (as can be seen in '/usr/include/sys/mount.h')
 
 	struct iovec iov_tmp[] = {
-		IOV("fstype", "tmpfs"),
+		IOV("fstype", "nullfs"),
 		IOV("fspath", "tmp"),
+		IOV("target", "/tmp"),
 		IOV("emptydir", ""),
 	};
 
 	if (nmount(iov_tmp, sizeof(iov_tmp) / sizeof(*iov_tmp), 0) < 0 && errno != ENOTEMPTY) {
-		errx(EXIT_FAILURE, "nmount: failed to mount tmpfs: %s", strerror(errno));
+		errx(EXIT_FAILURE, "nmount: failed to mount nullfs for /tmp: %s", strerror(errno));
 	}
 
 	// OS-specific actions
@@ -831,13 +836,17 @@ static void __remove_aquarium(char* aquarium_path) {
 	// so we don't wanna do anything with the return value of '__wait_for_process'
 
 	for (int i = 0; i < 2; i++) {
-		unmount("dev",  MNT_FORCE);
-		unmount("proc", MNT_FORCE);
-		unmount("sys",  MNT_FORCE);
-		unmount("tmp",  MNT_FORCE);
+		unmount("dev",     MNT_FORCE);
+		unmount("dev/fd",  MNT_FORCE);
+		unmount("dev/shm", MNT_FORCE);
+		unmount("proc",    MNT_FORCE);
+		unmount("sys",     MNT_FORCE);
+		unmount("tmp",     MNT_FORCE);
 	}
 
 	// then, we remove all the aquarium files
+	// TODO I desperately need some easy API for removing files in the standard library on aquaBSD
+	//      I'm not (I hope) dumb enough to do something like 'asprint(&cmd, "rm -rf %s", ent.aquarium_path)', but I know damn well other developers would be tempted to do such a thing given no other alternative
 
 	pid_t rm_pid = fork();
 
@@ -876,8 +885,6 @@ static int do_sweep(void) {
 		}
 
 		// if we can't find pointer file, remove the aquarium and that entry from the aquarium database
-		// TODO I desperately need some easy API for removing files in the standard library on aquaBSD
-		//      I'm not (I hope) dumb enough to do something like 'asprint(&cmd, "rm -rf %s", ent.aquarium_path)', but I know damn well other developers would be tempted to do such a thing given no other alternative
 
 		if (access(ent.pointer_path, R_OK) < 0) {
 			__remove_aquarium(ent.aquarium_path);

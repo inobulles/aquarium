@@ -760,6 +760,19 @@ found:
 	os_info_t os = __retrieve_os_info();
 
 	if (os == OS_LINUX) {
+		// mount /dev/shm as tmpfs
+		// on linux, this needs to have mode 1777
+
+		struct iovec iov_shm[] = {
+			IOV("fstype", "tmpfs"),
+			IOV("fspath", "dev/shm"),
+			IOV("mode", "1777"),
+		};
+
+		if (nmount(iov_shm, sizeof(iov_shm) / sizeof(*iov_shm), 0) < 0) {
+			errx(EXIT_FAILURE, "nmount: failed to mount shm tmpfs: %s", strerror(errno));
+		}
+
 		// mount linprocfs
 
 		struct iovec iov_proc[] = {

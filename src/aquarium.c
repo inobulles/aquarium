@@ -600,7 +600,11 @@ static int do_create(void) {
 			// fix APT defaults
 
 			"echo APT::Cache-Start \\\"100000000\\\"\\; >> /etc/apt/apt.conf.d/10cachestart;"
-			"sed -i 's/$/\\ universe/' /etc/apt/sources.list;";
+			"sed -i 's/$/\\ universe/' /etc/apt/sources.list;"
+
+			// broken symlink (symbolic, not hard!) which needs to be fixed for the dynamic linker to work
+
+			"ln -sf ../lib/x86_64-linux-gnu/ld-2.31.so /lib64/ld-linux-x86-64.so.2;";
 	}
 
 	else {

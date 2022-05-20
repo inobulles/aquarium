@@ -5,6 +5,7 @@
 //  - option for listing aquarium database
 //  - better way of copying over linux-nvidia-libs (probably best to build the package in a way which assumes it's installing to a Linux install right off the bat, and then have some kind of aquarium mechanism to install packages like 'aquarium -p my-aquarium linux-nvidia-libs-510.39.01.pkg' or something)
 //  - better solution than the 'compat.linux.emul_path' sysctl from FreeBSD, because that's super limited
+//  - may be interesting to replace instances of fgets with fparseln
 
 // building:
 // $ cc aquarium.c -larchive -lfetch -lcrypto -o aquarium
@@ -65,6 +66,9 @@ __FBSDID("$FreeBSD$");
 #include <paths.h>
 #include <pwd.h>
 
+#include <sys/param.h>
+
+#include <sys/linker.h>
 #include <sys/mount.h>
 #include <sys/procctl.h>
 #include <sys/uio.h>
@@ -158,6 +162,24 @@ static inline os_info_t __retrieve_os_info(void) {
 	}
 
 	return OS_GENERIC;
+}
+
+static void load_linux_kmod(void) {
+	if (!kldload("linux64")) {
+		return;
+	}
+
+	if (errno == EEXIST) {
+		return;
+	}
+
+	// jammer, iets is fout gegaan
+
+	if (errno == ENOEXEC) {
+		errx(EXIT_FAILURE, "kldload(\"linux64\"): please check dmesg(8) for details (or don't, I'm not your mum)");
+	}
+
+	errx(EXIT_FAILURE, "kldload(\"linux64\"): %s", strerror(errno));
 }
 
 typedef struct {
@@ -640,6 +662,8 @@ static int do_create(void) {
 		"echo 127.0.0.1 $hostname >> /etc/hosts;"
 
 	if (os == OS_LINUX) {
+		load_linux_kmod();
+
 		setup_script_fmt = SETUP_SCRIPT_HEADER
 			"useradd $username -u $uid -m -s /bin/bash;"
 			"passwd -d $username;"
@@ -812,6 +836,8 @@ found:
 	os_info_t os = __retrieve_os_info();
 
 	if (os == OS_LINUX) {
+		load_linux_kmod();
+
 		// mount /dev/shm as tmpfs
 		// on linux, this needs to have mode 1777
 

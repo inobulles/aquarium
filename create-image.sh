@@ -17,7 +17,7 @@ echo "[BOB] Creating UFS filesystem image ..."
 label="aquabsd-installer"
 image="$out/aquabsd.img"
 
-echo "/dev/ufs/$label / ufs ro,noatime 1 1" > $rootfs/etc/fstab
+echo "/dev/ufs/$label / ufs ro,noatime 1 1" >> $rootfs/etc/fstab
 echo "root_rw_mount=\"NO\"" > $rootfs/etc/rc.conf.local
 
 makefs -B little -o label=$label -o version=2 $image.part $rootfs

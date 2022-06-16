@@ -49,7 +49,7 @@ echo "debug.witness.trace=0" >> $rootfs/etc/sysctl.conf
 
 echo "vfs.mountroot.timeout=\"10\"" >> $rootfs/boot/loader.conf
 echo "kernels_autodetect=\"NO\"" >> $rootfs/boot/loader.conf
-echo "kern.vty=sc" >> $rootfs/boot/loader.conf
+echo "kern.vty=vt" >> $rootfs/boot/loader.conf
 echo "autoboot_delay=\"0\"" >> $rootfs/boot/loader.conf
 
 # custom setup

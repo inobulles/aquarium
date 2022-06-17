@@ -75,7 +75,11 @@ __FBSDID("$FreeBSD$");
 #include <sys/linker.h>
 #include <sys/mount.h>
 #include <sys/procctl.h>
+#include <sys/socket.h>
 #include <sys/uio.h>
+
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 // TODO the two following headers are necessary for 'fetch.h' but are not included
 //      most likely a bug, fix this
@@ -86,6 +90,7 @@ __FBSDID("$FreeBSD$");
 #include <archive.h>
 #include <copyfile.h>
 #include <fetch.h>
+#include <jail.h>
 
 #include <openssl/sha.h>
 
@@ -106,6 +111,12 @@ __FBSDID("$FreeBSD$");
 #define PROGRESS_FREQUENCY  (1 << 22)
 #define FETCH_CHUNK_BYTES   (1 << 16)
 #define ARCHIVE_CHUNK_BYTES (1 << 12)
+
+// macros
+
+#define IOV(name, val) \
+	(struct iovec) { .iov_base = (name), .iov_len = strlen((name)) + 1 }, \
+	(struct iovec) { .iov_base = (val ), .iov_len = strlen((val )) + 1 }
 
 // options
 
@@ -629,10 +640,7 @@ static int do_create(void) {
 	free(abs_path);
 	fclose(fp);
 
-	// enter the newly created aquarium to do a bit of configuration
-	// we can't do this is all in C, because, well, there's a chance the template is not the operating system we're currently running
-	// this does thus depend a lot on the platform we're running on
-	// the solution here is to generate an initial setup script depending on the aquarium's OS, which we then run in a chroot in the aquarium
+	// create the jail for the aquarium
 
 	size_t hostname_len = sysconf(_SC_HOST_NAME_MAX);
 	char hostname[hostname_len + 1];
@@ -640,6 +648,29 @@ static int do_create(void) {
 	if (gethostname(hostname, sizeof hostname)) {
 		errx(EXIT_FAILURE, "gethostname: %s", strerror(errno));
 	}
+
+	struct in_addr sa;
+	inet_pton(AF_INET, "192.168.1.15", &sa);
+
+	struct jail args = {
+		.version = JAIL_API_VERSION,
+		.path = aquarium_path,
+		.hostname = hostname,
+
+		.ip4s = 1,
+		.ip6s = 0,
+		.ip4 = &sa,
+		.ip6 = NULL,
+	};
+
+	if (jail(&args) < 0) {
+		errx(EXIT_FAILURE, "jail: %s", strerror(errno));
+	}
+
+	// enter the newly created aquarium to do a bit of configuration
+	// we can't do this is all in C, because, well, there's a chance the template is not the operating system we're currently running
+	// this does thus depend a lot on the platform we're running on
+	// the solution here is to generate an initial setup script depending on the aquarium's OS, which we then run in a chroot in the aquarium
 
 	struct passwd* passwd = getpwuid(uid);
 	char* username = passwd->pw_name;
@@ -686,11 +717,12 @@ static int do_create(void) {
 	if (!chroot_pid) {
 		// child process here
 
-		if (chroot(aquarium_path) < 0) {
-			errx(EXIT_FAILURE, "chroot: %s", strerror(errno));
-		}
+		// if (chroot(aquarium_path) < 0) {
+		// 	errx(EXIT_FAILURE, "chroot: %s", strerror(errno));
+		// }
 
-		execl("/bin/sh", "/bin/sh", "-c", setup_script, NULL);
+		// execl("/bin/sh", "/bin/sh", "-c", setup_script, NULL);
+		execl("/bin/sh", "/bin/sh", NULL);
 		_exit(EXIT_FAILURE);
 	}
 
@@ -789,10 +821,6 @@ found:
 	}
 
 	// mount devfs filesystem
-
-	#define IOV(name, val) \
-		(struct iovec) { .iov_base = (name), .iov_len = strlen((name)) + 1 }, \
-		(struct iovec) { .iov_base = (val ), .iov_len = strlen((val )) + 1 }
 
 	struct iovec iov_dev[] = {
 		IOV("fstype", "devfs"),
@@ -918,7 +946,7 @@ found:
 	// unfortunately we kinda need to use execlp here
 	// different OS' may have different locations for the sh binary
 
-	return execlp("sh", NULL);
+	return execlp("sh", "sh", NULL);
 }
 
 // sweeping aquariums (takes in nothing):

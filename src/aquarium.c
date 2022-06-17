@@ -111,6 +111,10 @@ __FBSDID("$FreeBSD$");
 	(struct iovec) { .iov_base = (name), .iov_len = strlen((name)) + 1 }, \
 	(struct iovec) { .iov_base = (val ), .iov_len = strlen((val )) + 1 }
 
+#define JAILPARAM(i, key, val) \
+	jailparam_init  (&args[(i)], (key)); \
+	jailparam_import(&args[(i)], (val));
+
 // options
 
 static char* template = "amd64.aquabsd.dev";
@@ -636,13 +640,12 @@ static int do_create(void) {
 	// enter the newly created aquarium to do a bit of configuration
 	// we can't do this is all in C, because, well, there's a chance the template is not the operating system we're currently running
 	// this does thus depend a lot on the platform we're running on
-	// the solution here is to generate an initial setup script depending on the aquarium's OS, which we then run in a chroot in the aquarium
+	// the solution here is to generate an initial setup script depending on the aquarium's OS, which we then run in the aquarium
 
-	size_t hostname_len = sysconf(_SC_HOST_NAME_MAX);
-	char hostname[hostname_len + 1];
+	char* name = strrchr(path, '/');
 
-	if (gethostname(hostname, sizeof hostname)) {
-		errx(EXIT_FAILURE, "gethostname: %s", strerror(errno));
+	if (!name) {
+		name = path;
 	}
 
 	struct passwd* passwd = getpwuid(uid);
@@ -679,7 +682,7 @@ static int do_create(void) {
 	}
 
 	char* setup_script;
-	asprintf(&setup_script, setup_script_fmt, username, uid, hostname);
+	asprintf(&setup_script, setup_script_fmt, username, uid, name);
 
 	// create the jail for the aquarium
 	// a few considerations here, because it seems appropriate to make these public:
@@ -687,16 +690,6 @@ static int do_create(void) {
 	//  - those which do have the 'PF_INTERNAL' flag (e.g. "mount.devfs" & "vnet.interface") are generally dished out to external commands (which can be found in 'usr.sbin/jail/command.c')
 
 	struct jailparam args[7] = { 0 };
-
-	#define JAILPARAM(i, key, val) \
-		jailparam_init  (&args[(i)], (key)); \
-		jailparam_import(&args[(i)], (val));
-
-	char* name = strrchr(path, '/');
-
-	if (!name) {
-		name = path;
-	}
 
 	JAILPARAM(0, "name", name);
 	JAILPARAM(1, "path", aquarium_path);
@@ -743,7 +736,7 @@ static int do_create(void) {
 //  - make sure the path of the pointer file is well the one contained in the relevant entry of the aquarium database
 //  - mount necessary filesystems (linsysfs, linprocfs, &c)
 //  - link (or bind mount) necessary directories (/dev, /tmp if specified, &c)
-//  - chroot into that aquarium and login as the user wanting to enter the aquarium
+//  - actually enter the aquarium
 
 static int do_enter(void) {
 	// read the pointer file
@@ -926,7 +919,7 @@ found:
 		}
 	}
 
-	// actually chroot
+	// actually enter aquarium
 	// PROC_NO_NEW_PRIVS_ENABLE is only available in aquaBSD and FreeBSD-CURRENT: https://reviews.freebsd.org/D30939
 
 #if __FreeBSD_version >= 1400026
@@ -937,9 +930,27 @@ found:
 	}
 #endif
 
-	if (chroot(aquarium_path) < 0) {
-		errx(EXIT_FAILURE, "chroot: %s", strerror(errno));
+	char* name = strrchr(path, '/');
+
+	if (!name) {
+		name = path;
 	}
+
+	struct jailparam args[7] = { 0 };
+
+	JAILPARAM(0, "name", name);
+	JAILPARAM(1, "path", aquarium_path);
+	JAILPARAM(2, "host", NULL);
+	JAILPARAM(3, "host.hostname", name);
+	JAILPARAM(4, "vnet", NULL);
+	JAILPARAM(5, "allow.raw_sockets", "true"); // allow for sending ICMP packets (for ping)
+	JAILPARAM(6, "allow.socket_af", "true");
+
+	if (jailparam_set(args, sizeof(args) / sizeof(*args), JAIL_CREATE | JAIL_ATTACH) < 0) {
+		errx(EXIT_FAILURE, "jailparam_set: %s", strerror(errno));
+	}
+
+	jailparam_free(args, sizeof(args) / sizeof(*args));
 
 	// unfortunately we kinda need to use execlp here
 	// different OS' may have different locations for the sh binary

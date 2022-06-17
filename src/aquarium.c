@@ -903,24 +903,22 @@ found:
 	// actually chroot
 	// PROC_NO_NEW_PRIVS_ENABLE is only available in aquaBSD and FreeBSD-CURRENT: https://reviews.freebsd.org/D30939
 
-	#if __FreeBSD_version >= 1400026
-		int flag = PROC_NO_NEW_PRIVS_ENABLE;
+#if __FreeBSD_version >= 1400026
+	int flag = PROC_NO_NEW_PRIVS_ENABLE;
 
-		if (procctl(P_PID, getpid(), PROC_NO_NEW_PRIVS_CTL, &flag) < 0) {
-			errx(EXIT_FAILURE, "procctl: %s", strerror(errno));
-		}
-	#endif
-
-	struct passwd* passwd = getpwuid(uid); // this must come before the chroot
+	if (procctl(P_PID, getpid(), PROC_NO_NEW_PRIVS_CTL, &flag) < 0) {
+		errx(EXIT_FAILURE, "procctl: %s", strerror(errno));
+	}
+#endif
 
 	if (chroot(aquarium_path) < 0) {
 		errx(EXIT_FAILURE, "chroot: %s", strerror(errno));
 	}
 
 	// unfortunately we kinda need to use execlp here
-	// different OS' may have different locations for the su binary
+	// different OS' may have different locations for the sh binary
 
-	return execlp("su", "su", "-", passwd->pw_name, NULL);
+	return execlp("sh", NULL);
 }
 
 // sweeping aquariums (takes in nothing):

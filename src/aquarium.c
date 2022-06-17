@@ -48,9 +48,6 @@
 // % $aquarium_path/opt/google/chrome/chrome --no-sandbox --enable-features=VaapiVideoDecoder
 // navigate to 'chrome://gpu' and verify that everything is working correctly
 
-// jail -c name=ananas path=$(realpath aquabsd-builder/rootfs) exec.start="/bin/sh /etc/rc" exec.stop="/bin/sh /etc/rc.shutdown" mount.devfs allow.nomount host.hostname=$jail_name ip4=inherit ip6=inherit
-// jexec ananas
-
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -685,18 +682,29 @@ static int do_create(void) {
 	asprintf(&setup_script, setup_script_fmt, username, uid, hostname);
 
 	// create the jail for the aquarium
+	// a few considerations here, because it seems appropriate to make these public:
+	//  - the various keys you can use for jailparams can be found in 'usr.sbin/jail/config.c', and they are the ones *without* the 'PF_INTERNAL' flag
+	//  - those which do have the 'PF_INTERNAL' flag (e.g. "mount.devfs" & "vnet.interface") are generally dished out to external commands (which can be found in 'usr.sbin/jail/command.c')
 
-	struct jailparam args[5] = { 0 };
+	struct jailparam args[7] = { 0 };
 
 	#define JAILPARAM(i, key, val) \
 		jailparam_init  (&args[(i)], (key)); \
 		jailparam_import(&args[(i)], (val));
 
-	JAILPARAM(0, "name", strrchr(path, '/'));
+	char* name = strrchr(path, '/');
+
+	if (!name) {
+		name = path;
+	}
+
+	JAILPARAM(0, "name", name);
 	JAILPARAM(1, "path", aquarium_path);
-	JAILPARAM(2, "host.hostname", hostname);
-	JAILPARAM(3, "ip4.addr", "192.168.1.15");
-	JAILPARAM(4, "allow.nomount", "true");
+	JAILPARAM(2, "host", NULL);
+	JAILPARAM(3, "host.hostname", name);
+	JAILPARAM(4, "vnet", NULL);
+	JAILPARAM(5, "allow.raw_sockets", "true"); // allow for sending ICMP packets (for ping)
+	JAILPARAM(6, "allow.socket_af", "true");
 
 	if (jailparam_set(args, sizeof(args) / sizeof(*args), JAIL_CREATE | JAIL_ATTACH) < 0) {
 		errx(EXIT_FAILURE, "jailparam_set: %s", strerror(errno));
@@ -704,28 +712,22 @@ static int do_create(void) {
 
 	jailparam_free(args, sizeof(args) / sizeof(*args));
 
-	// fork the process and chroot into the child to run that initial setup script
+	// fork the process and run that initial setup script
 	// then, wait for it to finish parent-side (and check for errors blah blah)
-	// TODO take a look at how all this works out security-wise wrt setuid
 
-	pid_t chroot_pid = fork();
+	pid_t setup_pid = fork();
 
-	if (!chroot_pid) {
+	if (!setup_pid) {
 		// child process here
 
-		// if (chroot(aquarium_path) < 0) {
-		// 	errx(EXIT_FAILURE, "chroot: %s", strerror(errno));
-		// }
-
-		// execl("/bin/sh", "/bin/sh", "-c", setup_script, NULL);
-		execl("/bin/sh", "/bin/sh", NULL);
+		execl("/bin/sh", "/bin/sh", "-c", setup_script, NULL);
 		_exit(EXIT_FAILURE);
 	}
 
-	int child_rv = __wait_for_process(chroot_pid);
+	int child_rv = __wait_for_process(setup_pid);
 
 	if (child_rv < 0) {
-		errx(EXIT_FAILURE, "Child chroot process exited with error code %d", child_rv);
+		errx(EXIT_FAILURE, "Child setup process exited with error code %d", child_rv);
 	}
 
 	// finish writing pointer file as user

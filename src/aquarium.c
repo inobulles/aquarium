@@ -8,7 +8,7 @@
 //  - may be interesting to replace instances of fgets with fparseln
 
 // building:
-// $ cc aquarium.c -larchive -lfetch -lcrypto -o aquarium
+// $ cc aquarium.c -larchive -lfetch -lcrypto -lcopyfile -o aquarium
 // $ chmod u+s aquarium && chown root:wheel aquarium
 
 // create group:
@@ -71,6 +71,7 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 
+#include <sys/jail.h>
 #include <sys/linker.h>
 #include <sys/mount.h>
 #include <sys/procctl.h>
@@ -650,8 +651,6 @@ static int do_create(void) {
 		"#!/bin/sh\n" \
 		"set -e;" \
 		\
-		"username=%s;" \
-		"uid=%d;" \
 		"hostname=%s;" \
 		\
 		"echo $hostname > /etc/hostname;" \
@@ -661,10 +660,6 @@ static int do_create(void) {
 		load_linux_kmod();
 
 		setup_script_fmt = SETUP_SCRIPT_HEADER
-			"useradd $username -u $uid -m -s /bin/bash;"
-			"passwd -d $username;"
-			"echo $username 'ALL=(ALL:ALL) ALL' >> /etc/sudoers;"
-
 			// fix APT defaults
 
 			"echo APT::Cache-Start \\\"100000000\\\"\\; >> /etc/apt/apt.conf.d/10cachestart;"
@@ -676,8 +671,7 @@ static int do_create(void) {
 	}
 
 	else {
-		setup_script_fmt = SETUP_SCRIPT_HEADER
-			"pw useradd $username -u $uid -m -s /bin/sh -G wheel -w none;";
+		setup_script_fmt = SETUP_SCRIPT_HEADER;
 	}
 
 	char* setup_script;

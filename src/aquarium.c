@@ -8,7 +8,7 @@
 //  - may be interesting to replace instances of fgets with fparseln
 
 // building:
-// $ cc aquarium.c -larchive -lfetch -lcrypto -lcopyfile -o aquarium
+// $ cc aquarium.c -larchive -lfetch -lcrypto -lcopyfile -ljail -o aquarium
 // $ chmod u+s aquarium && chown root:wheel aquarium
 
 // create group:
@@ -75,11 +75,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/linker.h>
 #include <sys/mount.h>
 #include <sys/procctl.h>
-#include <sys/socket.h>
 #include <sys/uio.h>
-
-#include <netinet/in.h>
-#include <arpa/inet.h>
 
 // TODO the two following headers are necessary for 'fetch.h' but are not included
 //      most likely a bug, fix this
@@ -89,8 +85,8 @@ __FBSDID("$FreeBSD$");
 
 #include <archive.h>
 #include <copyfile.h>
-#include <fetch.h>
 #include <jail.h>
+#include <fetch.h>
 
 #include <openssl/sha.h>
 
@@ -640,7 +636,10 @@ static int do_create(void) {
 	free(abs_path);
 	fclose(fp);
 
-	// create the jail for the aquarium
+	// enter the newly created aquarium to do a bit of configuration
+	// we can't do this is all in C, because, well, there's a chance the template is not the operating system we're currently running
+	// this does thus depend a lot on the platform we're running on
+	// the solution here is to generate an initial setup script depending on the aquarium's OS, which we then run in a chroot in the aquarium
 
 	size_t hostname_len = sysconf(_SC_HOST_NAME_MAX);
 	char hostname[hostname_len + 1];
@@ -648,29 +647,6 @@ static int do_create(void) {
 	if (gethostname(hostname, sizeof hostname)) {
 		errx(EXIT_FAILURE, "gethostname: %s", strerror(errno));
 	}
-
-	struct in_addr sa;
-	inet_pton(AF_INET, "192.168.1.15", &sa);
-
-	struct jail args = {
-		.version = JAIL_API_VERSION,
-		.path = aquarium_path,
-		.hostname = hostname,
-
-		.ip4s = 1,
-		.ip6s = 0,
-		.ip4 = &sa,
-		.ip6 = NULL,
-	};
-
-	if (jail(&args) < 0) {
-		errx(EXIT_FAILURE, "jail: %s", strerror(errno));
-	}
-
-	// enter the newly created aquarium to do a bit of configuration
-	// we can't do this is all in C, because, well, there's a chance the template is not the operating system we're currently running
-	// this does thus depend a lot on the platform we're running on
-	// the solution here is to generate an initial setup script depending on the aquarium's OS, which we then run in a chroot in the aquarium
 
 	struct passwd* passwd = getpwuid(uid);
 	char* username = passwd->pw_name;
@@ -707,6 +683,26 @@ static int do_create(void) {
 
 	char* setup_script;
 	asprintf(&setup_script, setup_script_fmt, username, uid, hostname);
+
+	// create the jail for the aquarium
+
+	struct jailparam args[5] = { 0 };
+
+	#define JAILPARAM(i, key, val) \
+		jailparam_init  (&args[(i)], (key)); \
+		jailparam_import(&args[(i)], (val));
+
+	JAILPARAM(0, "name", strrchr(path, '/'));
+	JAILPARAM(1, "path", aquarium_path);
+	JAILPARAM(2, "host.hostname", hostname);
+	JAILPARAM(3, "ip4.addr", "192.168.1.15");
+	JAILPARAM(4, "allow.nomount", "true");
+
+	if (jailparam_set(args, sizeof(args) / sizeof(*args), JAIL_CREATE | JAIL_ATTACH) < 0) {
+		errx(EXIT_FAILURE, "jailparam_set: %s", strerror(errno));
+	}
+
+	jailparam_free(args, sizeof(args) / sizeof(*args));
 
 	// fork the process and chroot into the child to run that initial setup script
 	// then, wait for it to finish parent-side (and check for errors blah blah)

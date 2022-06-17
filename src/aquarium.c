@@ -48,6 +48,9 @@
 // % $aquarium_path/opt/google/chrome/chrome --no-sandbox --enable-features=VaapiVideoDecoder
 // navigate to 'chrome://gpu' and verify that everything is working correctly
 
+// jail -c name=ananas path=$(realpath aquabsd-builder/rootfs) exec.start="/bin/sh /etc/rc" exec.stop="/bin/sh /etc/rc.shutdown" mount.devfs allow.nomount host.hostname=$jail_name ip4=inherit ip6=inherit
+// jexec ananas
+
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
@@ -103,14 +106,7 @@ __FBSDID("$FreeBSD$");
 #define FETCH_CHUNK_BYTES   (1 << 16)
 #define ARCHIVE_CHUNK_BYTES (1 << 12)
 
-#define LOG(...) \
-	if (verbose) { \
-		printf(__VA_ARGS__); \
-	}
-
 // options
-
-static bool verbose = false;
 
 static char* template = "amd64.aquabsd.dev";
 static char* path = NULL;
@@ -1110,16 +1106,10 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:e:lst:v")) != -1) {
-		// general options
-
-		if (c == 'v') {
-			verbose = true;
-		}
-
+	while ((c = getopt(argc, argv, "c:e:lst:")) != -1) {
 		// action options
 
-		else if (c == 'c') {
+		if (c == 'c') {
 			action = do_create;
 			path = optarg;
 		}
@@ -1153,8 +1143,6 @@ int main(int argc, char* argv[]) {
 
 	// make sure the $STONERS_GROUP group exists, and error if not
 
-	LOG("Making sure \"" STONERS_GROUP "\" exists\n")
-
 	struct group* stoners_group = getgrnam(STONERS_GROUP);
 
 	if (!stoners_group) {
@@ -1164,8 +1152,6 @@ int main(int argc, char* argv[]) {
 	endgrent();
 
 	// make sure user is part of the $STONERS_GROUP group
-
-	LOG("Making sure user is part of group (gid = %d)\n", stoners_group->gr_gid)
 
 	uid_t uid = getuid();
 	struct passwd* passwd = getpwuid(uid);
@@ -1182,6 +1168,5 @@ int main(int argc, char* argv[]) {
 
 okay:
 
-	LOG("Doing action\n");
 	return action();
 }

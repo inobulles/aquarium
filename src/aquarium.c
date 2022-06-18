@@ -62,6 +62,7 @@ __FBSDID("$FreeBSD$");
 #include <unistd.h>
 
 #include <err.h>
+#include <fcntl.h>
 #include <grp.h>
 #include <paths.h>
 #include <pwd.h>
@@ -700,13 +701,13 @@ static int do_create(void) {
 
 	struct jailparam args[7] = { 0 };
 
-	JAILPARAM(0, "name", name);
-	JAILPARAM(1, "path", aquarium_path);
-	JAILPARAM(2, "host", NULL);
-	JAILPARAM(3, "host.hostname", name);
-	JAILPARAM(4, "vnet", NULL);
-	JAILPARAM(5, "allow.raw_sockets", "true"); // allow for sending ICMP packets (for ping)
-	JAILPARAM(6, "allow.socket_af", "true");
+	JAILPARAM(0, "name", name)
+	JAILPARAM(1, "path", aquarium_path)
+	JAILPARAM(2, "host", NULL)
+	JAILPARAM(3, "host.hostname", name)
+	JAILPARAM(4, "vnet", NULL)
+	JAILPARAM(5, "allow.raw_sockets", "true") // allow for sending ICMP packets (for ping)
+	JAILPARAM(6, "allow.socket_af", "true")
 
 	if (jailparam_set(args, sizeof(args) / sizeof(*args), JAIL_CREATE | JAIL_ATTACH) < 0) {
 		errx(EXIT_FAILURE, "jailparam_set: %s", strerror(errno));
@@ -947,13 +948,13 @@ found:
 
 	struct jailparam args[7] = { 0 };
 
-	JAILPARAM(0, "name", name);
-	JAILPARAM(1, "path", aquarium_path);
-	JAILPARAM(2, "host", NULL);
-	JAILPARAM(3, "host.hostname", name);
-	JAILPARAM(4, "vnet", NULL);
-	JAILPARAM(5, "allow.raw_sockets", "true"); // allow for sending ICMP packets (for ping)
-	JAILPARAM(6, "allow.socket_af", "true");
+	JAILPARAM(0, "name", name)
+	JAILPARAM(1, "path", aquarium_path)
+	JAILPARAM(2, "host", NULL)
+	JAILPARAM(3, "host.hostname", name)
+	JAILPARAM(4, "vnet", NULL)
+	JAILPARAM(5, "allow.raw_sockets", "true") // allow for sending ICMP packets (for ping)
+	JAILPARAM(6, "allow.socket_af", "true")
 
 	if (jailparam_set(args, sizeof(args) / sizeof(*args), JAIL_CREATE | JAIL_ATTACH) < 0) {
 		errx(EXIT_FAILURE, "jailparam_set: %s", strerror(errno));
@@ -1133,6 +1134,125 @@ static int do_sweep(void) {
 	return 0;
 }
 
+// outputting aquariums (TODO: much of this code can be shared with do_enter)
+//  - make sure the path of the pointer file is well the one contained in the relevant entry of the aquarium database
+
+typedef struct {
+	const char* out;
+	int fd;
+} do_out_state_t;
+
+static int do_out_open_cb(struct archive* archive, void* _state) {
+	do_out_state_t* state = _state;
+
+	state->fd = open(state->out, O_WRONLY | O_CREAT, 0644);
+
+	if (state->fd < 0) {
+		warnx("open(\"%s\"): %s", state->out, strerror(errno));
+		return ARCHIVE_FATAL;
+	}
+
+	return ARCHIVE_OK;
+}
+
+static la_ssize_t do_out_write_cb(struct archive* archive, void* _state, const void* buf, size_t len) {
+	do_out_state_t* state = _state;
+	return write(state->fd, buf, len);
+}
+
+static int do_out_close_cb(struct archive* archive, void* _state) {
+	do_out_state_t* state = _state;
+
+	if (state->fd > 0) {
+		close(state->fd);
+	}
+
+	return ARCHIVE_OK;
+}
+
+static int do_out(void) {
+	// read the pointer file
+
+	FILE* fp = fopen(path, "r");
+
+	if (!fp) {
+		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", path, strerror(errno));
+	}
+
+	fseek(fp, 0, SEEK_END);
+	size_t len = ftell(fp);
+
+	rewind(fp);
+
+	char* aquarium_path = malloc(len + 1);
+	aquarium_path[len] = 0;
+
+	if (fread(aquarium_path, 1, len, fp) != len) {
+		errx(EXIT_FAILURE, "fread: %s", strerror(errno));
+	}
+
+	fclose(fp);
+
+	// make sure the path of the pointer file is well the one contained in the relevant entry of the aquarium database
+
+	char* abs_path = realpath(path, NULL);
+
+	if (!abs_path) {
+		errx(EXIT_FAILURE, "realpath: %s", strerror(errno));
+	}
+
+	/* FILE* */ fp = fopen(aquarium_db_path, "r");
+
+	if (!fp) {
+		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", aquarium_db_path, strerror(errno));
+	}
+
+	char buf[1024];
+	db_ent_t ent;
+
+	while (next_db_ent(&ent, sizeof buf, buf, fp, true)) {
+		if (strcmp(ent.pointer_path, abs_path)) {
+			continue;
+		}
+
+		if (strcmp(ent.aquarium_path, aquarium_path)) {
+			errx(EXIT_FAILURE, "Found pointer file in the aquarium database, but it doesn't point to the correct aquarium (%s vs %s)", aquarium_path, ent.aquarium_path);
+		}
+
+		goto found;
+	}
+
+	errx(EXIT_FAILURE, "Could not find pointer file %s in the aquarium database", abs_path);
+
+found:
+
+	free(abs_path);
+	fclose(fp);
+
+	// create template
+	// try to deduce compression format to use based on file extension, and if that fails, default to XZ compression
+
+	do_out_state_t state = {
+		.out = template
+	};
+
+	struct archive* archive = archive_write_new();
+
+	if (archive_write_set_format_filter_by_ext(archive, template) != ARCHIVE_OK) {
+		archive_write_add_filter_xz (archive); // archive_write_filter(3)
+		archive_write_set_format_pax(archive); // archive_write_format(3)
+	}
+
+	archive_write_open(archive, &state, do_out_open_cb, do_out_write_cb, do_out_close_cb);
+
+	// TODO walk across all files in the aquarium
+	//      check out the example in archive_write(3) for what to do next
+
+	archive_write_free(archive);
+
+	return EXIT_FAILURE;
+}
+
 // main function
 
 typedef int (*action_t) (void);
@@ -1144,7 +1264,7 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:e:lr:st:")) != -1) {
+	while ((c = getopt(argc, argv, "c:e:lo:r:st:")) != -1) {
 		// general options
 
 		if (c == 'r') {
@@ -1165,6 +1285,10 @@ int main(int argc, char* argv[]) {
 
 		else if (c == 'l') {
 			action = do_list_templates;
+		}
+
+		else if (c == 'o') {
+			action = do_out;
 		}
 
 		else if (c == 's') {

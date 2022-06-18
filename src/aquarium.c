@@ -131,11 +131,11 @@ static char* aquarium_db_path;
 
 static void __dead2 usage(void) {
 	fprintf(stderr,
-		"usage: %1$s [-v]\n"
-		"       %1$s [-v] -c path [-t template]\n"
-		"       %1$s [-v] -e path\n"
-		"       %1$s [-v] -l\n"
-		"       %1$s [-v] -s\n",
+		"usage: %1$s [-r base]\n"
+		"       %1$s [-r base] -c path [-t template]\n"
+		"       %1$s [-r base] -e path\n"
+		"       %1$s [-r base] -l\n"
+		"       %1$s [-r base] -s\n",
 	getprogname());
 
 	exit(EXIT_FAILURE);

@@ -91,15 +91,15 @@ __FBSDID("$FreeBSD$");
 
 #define STONERS_GROUP "stoners"
 
-#define BASE_PATH "/etc/aquariums/"
+#define DEFAULT_BASE_PATH "/etc/aquariums/"
 
-#define TEMPLATES_PATH BASE_PATH "templates/"
-#define AQUARIUMS_PATH BASE_PATH "aquariums/"
+#define TEMPLATES_PATH "templates/"
+#define AQUARIUMS_PATH "aquariums/"
 
 #define ILLEGAL_TEMPLATE_PREFIX '.'
 
-#define SANCTIONED_TEMPLATES BASE_PATH "templates_remote"
-#define AQUARIUM_DB_PATH     BASE_PATH "aquarium_db"
+#define SANCTIONED_TEMPLATES "templates_remote"
+#define AQUARIUM_DB_PATH     "aquarium_db"
 
 #define PROGRESS_FREQUENCY  (1 << 22)
 #define FETCH_CHUNK_BYTES   (1 << 16)
@@ -119,6 +119,14 @@ __FBSDID("$FreeBSD$");
 
 static char* template = "amd64.aquabsd.dev";
 static char* path = NULL;
+
+static char* base_path = DEFAULT_BASE_PATH;
+
+static char* templates_path;
+static char* aquariums_path;
+
+static char* sanctioned_templates;
+static char* aquarium_db_path;
 
 static void __dead2 usage(void) {
 	fprintf(stderr,
@@ -213,7 +221,7 @@ static bool next_db_ent(db_ent_t* ent, size_t buf_len, char buf[buf_len], FILE* 
 	char* aquarium_path = strsep(&line, ":");
 
 	if (be_dramatic && (!pointer_path || !aquarium_path)) {
-		errx(EXIT_FAILURE, "Aquarium database file %s has an invalid format", AQUARIUM_DB_PATH);
+		errx(EXIT_FAILURE, "Aquarium database file %s has an invalid format", aquarium_db_path);
 	}
 
 	ent->pointer_path  = pointer_path;
@@ -240,10 +248,10 @@ static inline int __wait_for_process(pid_t pid) {
 // actions
 
 static int do_list(void) {
-	FILE* fp = fopen(AQUARIUM_DB_PATH, "r");
+	FILE* fp = fopen(aquarium_db_path, "r");
 
 	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", AQUARIUM_DB_PATH, strerror(errno));
+		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", aquarium_db_path, strerror(errno));
 	}
 
 	printf("POINTER\tAQUARIUM\n");
@@ -261,10 +269,10 @@ static int do_list(void) {
 }
 
 static int do_list_templates(void) {
-	DIR* dp = opendir(TEMPLATES_PATH);
+	DIR* dp = opendir(templates_path);
 
 	if (!dp) {
-		errx(EXIT_FAILURE, "opendir: failed to open template directory %s: %s", TEMPLATES_PATH, strerror(errno));
+		errx(EXIT_FAILURE, "opendir: failed to open template directory %s: %s", templates_path, strerror(errno));
 	}
 
 	printf("ARCH\tOS\tVERS\n");
@@ -317,10 +325,10 @@ static int do_list_templates(void) {
 static inline void __download_template(const char* template) {
 	// read list of sanctioned templates, and see if we have a match
 
-	FILE* fp = fopen(SANCTIONED_TEMPLATES, "r");
+	FILE* fp = fopen(sanctioned_templates, "r");
 
 	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", SANCTIONED_TEMPLATES, strerror(errno));
+		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", sanctioned_templates, strerror(errno));
 	}
 
 	char buf[1024]; // I don't super like doing this, but it's unlikely we'll run into any problems
@@ -389,7 +397,7 @@ static inline void __download_template(const char* template) {
 	// we didn't find our template, unfortunately :(
 
 	fclose(fp);
-	errx(EXIT_FAILURE, "Couldn't find template %s in list of sanctioned templates (%s)", template, SANCTIONED_TEMPLATES);
+	errx(EXIT_FAILURE, "Couldn't find template %s in list of sanctioned templates (%s)", template, sanctioned_templates);
 
 found:
 
@@ -406,7 +414,7 @@ found:
 	printf("Found template, downloading from %s ...\n", composed_url);
 
 	char* path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
-	asprintf(&path, TEMPLATES_PATH "%c%s.txz", ILLEGAL_TEMPLATE_PREFIX, name);
+	asprintf(&path, "%s%c%s.txz", templates_path, ILLEGAL_TEMPLATE_PREFIX, name);
 
 	/* FILE* */ fp = fopen(path, "w");
 
@@ -485,7 +493,7 @@ found:
 	// checks have succeeded; move temporary file to permanent position
 
 	char* final_path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
-	asprintf(&final_path, TEMPLATES_PATH "%s.txz", name);
+	asprintf(&final_path, "%s%s.txz", templates_path, name);
 
 	if (rename(path, final_path) < 0) {
 		errx(EXIT_FAILURE, "rename: failed to rename %s to %s: %s", path, final_path, strerror(errno));
@@ -506,7 +514,8 @@ static int do_create(void) {
 	// generate final aquarium path
 
 	char* aquarium_path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
-	asprintf(&aquarium_path, AQUARIUMS_PATH "%s-XXXXXXX", template);
+	asprintf(&aquarium_path, "%s%s-XXXXXXX", aquariums_path, template);
+
 	aquarium_path = mkdtemp(aquarium_path);
 
 	if (!aquarium_path) {
@@ -533,10 +542,10 @@ static int do_create(void) {
 		errx(EXIT_FAILURE, "realpath: %s", strerror(errno));
 	}
 
-	/* FILE* */ fp = fopen(AQUARIUM_DB_PATH, "r");
+	/* FILE* */ fp = fopen(aquarium_db_path, "r");
 
 	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", AQUARIUM_DB_PATH, strerror(errno));
+		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", aquarium_db_path, strerror(errno));
 	}
 
 	char buf[1024];
@@ -544,7 +553,7 @@ static int do_create(void) {
 
 	while (next_db_ent(&ent, sizeof buf, buf, fp, true)) {
 		if (!strcmp(ent.pointer_path, abs_path)) {
-			errx(EXIT_FAILURE, "Pointer file already exists in the aquarium database at %s (pointer file is supposed to reside at %s and point to %s)", AQUARIUM_DB_PATH, ent.pointer_path, ent.aquarium_path);
+			errx(EXIT_FAILURE, "Pointer file already exists in the aquarium database at %s (pointer file is supposed to reside at %s and point to %s)", aquarium_db_path, ent.pointer_path, ent.aquarium_path);
 		}
 	}
 
@@ -561,7 +570,7 @@ static int do_create(void) {
 	// build template path
 
 	char* template_path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
-	asprintf(&template_path, TEMPLATES_PATH "%s.txz", template);
+	asprintf(&template_path, "%s%s.txz", templates_path, template);
 
 	if (access(template_path, R_OK) < 0) {
 		// file template doesn't yet exist; download & check it
@@ -626,10 +635,10 @@ static int do_create(void) {
 
 	// write info to aquarium database
 
-	/* FILE* */ fp = fopen(AQUARIUM_DB_PATH, "a");
+	/* FILE* */ fp = fopen(aquarium_db_path, "a");
 
 	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", AQUARIUM_DB_PATH, strerror(errno));
+		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", aquarium_db_path, strerror(errno));
 	}
 
 	fprintf(fp, "%s:%s\n", abs_path, aquarium_path);
@@ -769,10 +778,10 @@ static int do_enter(void) {
 		errx(EXIT_FAILURE, "realpath: %s", strerror(errno));
 	}
 
-	/* FILE* */ fp = fopen(AQUARIUM_DB_PATH, "r");
+	/* FILE* */ fp = fopen(aquarium_db_path, "r");
 
 	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", AQUARIUM_DB_PATH, strerror(errno));
+		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", aquarium_db_path, strerror(errno));
 	}
 
 	char buf[1024];
@@ -1004,10 +1013,10 @@ static int do_sweep(void) {
 
 	// go through aquarium database
 
-	FILE* fp = fopen(AQUARIUM_DB_PATH, "r");
+	FILE* fp = fopen(aquarium_db_path, "r");
 
 	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", AQUARIUM_DB_PATH, strerror(errno));
+		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", aquarium_db_path, strerror(errno));
 	}
 
 	char buf[1024];
@@ -1060,7 +1069,7 @@ static int do_sweep(void) {
 
 	// keep things nice and clean is to go through everything under /etc/aquariums/aquariums and see which aquariums were never "recensés" (censused?)
 
-	DIR* dp = opendir(AQUARIUMS_PATH);
+	DIR* dp = opendir(aquariums_path);
 
 	if (!dp) {
 		errx(EXIT_FAILURE, "opendir: %s", strerror(errno));
@@ -1089,7 +1098,7 @@ static int do_sweep(void) {
 		// ah! couldn't find the aquarium in the list of survivors! remove it!
 
 		char* aquarium_path;
-		asprintf(&aquarium_path, "%s/%s", AQUARIUMS_PATH, name);
+		asprintf(&aquarium_path, "%s/%s", aquariums_path, name);
 
 		__remove_aquarium(aquarium_path);
 		free(aquarium_path);
@@ -1103,10 +1112,10 @@ static int do_sweep(void) {
 
 	// last thing to do is rebuild new aquarium database file with the entries that survived
 
-	/* FILE* */ fp = fopen(AQUARIUM_DB_PATH, "w");
+	/* FILE* */ fp = fopen(aquarium_db_path, "w");
 
 	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", AQUARIUM_DB_PATH, strerror(errno));
+		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", aquarium_db_path, strerror(errno));
 	}
 
 	for (size_t i = 0; i < survivors_len; i++) {
@@ -1135,10 +1144,16 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:e:lst:")) != -1) {
+	while ((c = getopt(argc, argv, "c:e:lr:st:")) != -1) {
+		// general options
+
+		if (c == 'r') {
+			base_path = optarg;
+		}
+
 		// action options
 
-		if (c == 'c') {
+		else if (c == 'c') {
 			action = do_create;
 			path = optarg;
 		}
@@ -1169,6 +1184,15 @@ int main(int argc, char* argv[]) {
 
 	argc -= optind;
 	argv += optind;
+
+	// generate various paths relative to the base path
+	// we don't really care about freeing these
+
+	asprintf(&templates_path,       "%s/" TEMPLATES_PATH,       base_path);
+	asprintf(&aquariums_path,       "%s/" AQUARIUMS_PATH,       base_path);
+
+	asprintf(&sanctioned_templates, "%s/" SANCTIONED_TEMPLATES, base_path);
+	asprintf(&aquarium_db_path,     "%s/" AQUARIUM_DB_PATH,     base_path);
 
 	// make sure the $STONERS_GROUP group exists, and error if not
 

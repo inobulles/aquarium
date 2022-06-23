@@ -1447,6 +1447,14 @@ int main(int argc, char* argv[]) {
 	asprintf(&sanctioned_templates, "%s/" SANCTIONED_TEMPLATES, base_path);
 	asprintf(&aquarium_db_path,     "%s/" AQUARIUM_DB_PATH,     base_path);
 
+	// skip this stuff if we're root
+
+	uid_t uid = getuid();
+
+	if (!uid) {
+		goto okay;
+	}
+
 	// make sure the $STONERS_GROUP group exists, and error if not
 
 	struct group* stoners_group = getgrnam(STONERS_GROUP);
@@ -1459,9 +1467,7 @@ int main(int argc, char* argv[]) {
 
 	// make sure user is part of the $STONERS_GROUP group
 
-	uid_t uid = getuid();
 	struct passwd* passwd = getpwuid(uid);
-
 	char** stoners = stoners_group->gr_mem;
 
 	while (*stoners) {

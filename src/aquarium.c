@@ -1262,10 +1262,8 @@ found:
 
 	struct archive* archive = archive_write_new();
 
-	// if (archive_write_set_format_filter_by_ext(archive, strrchr(template, '.')) != ARCHIVE_OK) {
-		archive_write_add_filter_xz   (archive); // archive_write_filter(3)
-		archive_write_set_format_ustar(archive); // archive_write_format(3)
-	// }
+	archive_write_add_filter_xz   (archive); // archive_write_filter(3)
+	archive_write_set_format_ustar(archive); // archive_write_format(3)
 
 	archive_write_set_filter_option(archive, NULL, "compression-level", "9");
 	archive_write_set_filter_option(archive, NULL, "threads", "0"); // fixed as of https://github.com/libarchive/libarchive/pull/1664

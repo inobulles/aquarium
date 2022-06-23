@@ -123,6 +123,7 @@ __FBSDID("$FreeBSD$");
 static char* template = "amd64.aquabsd.dev";
 static char* path = NULL;
 
+static bool persist = false;
 static char* base_path = DEFAULT_BASE_PATH;
 
 static char* templates_path;
@@ -135,7 +136,8 @@ static void __dead2 usage(void) {
 	fprintf(stderr,
 		"usage: %1$s [-r base]\n"
 		"       %1$s [-r base] -c path [-t template]\n"
-		"       %1$s [-r base] -e path\n"
+		"       %1$s [-r base] -o path [-t template]\n"
+		"       %1$s [-r base] [-p] -e path\n"
 		"       %1$s [-r base] -l\n"
 		"       %1$s [-r base] -s\n",
 	getprogname());
@@ -144,6 +146,17 @@ static void __dead2 usage(void) {
 }
 
 // utility functions
+
+static inline char* __hash(char* str) { // djb2 algorithm
+	uint64_t hash = 5381;
+
+	while (*str) {
+		hash = ((hash << 5) + hash) + *str++;
+	}
+
+	asprintf(&str, "%lx", hash);
+	return str;
+}
 
 typedef enum {
 	OS_GENERIC, OS_FBSD, OS_LINUX
@@ -703,7 +716,7 @@ static int do_create(void) {
 
 	struct jailparam args[7] = { 0 };
 
-	JAILPARAM(0, "name", name)
+	JAILPARAM(0, "name", __hash(aquarium_path)) // don't care about freeing
 	JAILPARAM(1, "path", aquarium_path)
 	JAILPARAM(2, "host", NULL)
 	JAILPARAM(3, "host.hostname", name)
@@ -712,7 +725,7 @@ static int do_create(void) {
 	JAILPARAM(6, "allow.socket_af", "true")
 
 	if (jailparam_set(args, sizeof(args) / sizeof(*args), JAIL_CREATE | JAIL_ATTACH) < 0) {
-		errx(EXIT_FAILURE, "jailparam_set: %s", strerror(errno));
+		errx(EXIT_FAILURE, "jailparam_set: %s (%s)", strerror(errno), jail_errmsg);
 	}
 
 	jailparam_free(args, sizeof(args) / sizeof(*args));
@@ -942,27 +955,50 @@ found:
 	}
 #endif
 
-	char* name = strrchr(path, '/');
+	char* hash = __hash(aquarium_path); // don't care about freeing
+	int jid = jail_getid(hash);
 
-	if (!name) {
-		name = path;
+	if (jid >= 0) {
+		if (jail_attach(jid) < 0) {
+			errx(EXIT_FAILURE, "jail_attach: %s", strerror(errno));
+		}
+
+		goto shell;
 	}
 
-	struct jailparam args[7] = { 0 };
+	char* hostname = strrchr(path, '/');
 
-	JAILPARAM(0, "name", name)
+	if (!hostname) {
+		hostname = path;
+	}
+
+	struct jailparam args[8] = { 0 };
+	size_t args_len = 7;
+
+	JAILPARAM(0, "name", __hash(aquarium_path))
 	JAILPARAM(1, "path", aquarium_path)
 	JAILPARAM(2, "host", NULL)
-	JAILPARAM(3, "host.hostname", name)
+	JAILPARAM(3, "host.hostname", hostname)
 	JAILPARAM(4, "vnet", NULL)
 	JAILPARAM(5, "allow.raw_sockets", "true") // allow for sending ICMP packets (for ping)
 	JAILPARAM(6, "allow.socket_af", "true")
 
-	if (jailparam_set(args, sizeof(args) / sizeof(*args), JAIL_CREATE | JAIL_ATTACH) < 0) {
-		errx(EXIT_FAILURE, "jailparam_set: %s", strerror(errno));
+	if (persist) {
+		JAILPARAM(7, "persist", NULL)
+		args_len++;
 	}
 
-	jailparam_free(args, sizeof(args) / sizeof(*args));
+	if (jailparam_set(args, args_len, JAIL_CREATE | JAIL_ATTACH) < 0) {
+		errx(EXIT_FAILURE, "jailparam_set: %s (%s)", strerror(errno), jail_errmsg);
+	}
+
+	jailparam_free(args, args_len);
+
+shell:
+
+	if (persist) {
+		return EXIT_SUCCESS;
+	}
 
 	// unfortunately we kinda need to use execlp here
 	// different OS' may have different locations for the sh binary
@@ -1138,6 +1174,7 @@ static int do_sweep(void) {
 
 // outputting aquariums (TODO: much of this code can be shared with do_enter)
 //  - make sure the path of the pointer file is well the one contained in the relevant entry of the aquarium database
+//  - walk the aquarium path and add files/directories to output archive
 
 typedef struct {
 	const char* out;
@@ -1265,8 +1302,8 @@ found:
 	archive_write_add_filter_xz   (archive); // archive_write_filter(3)
 	archive_write_set_format_ustar(archive); // archive_write_format(3)
 
-	archive_write_set_filter_option(archive, NULL, "compression-level", "9");
-	archive_write_set_filter_option(archive, NULL, "threads", "0"); // fixed as of https://github.com/libarchive/libarchive/pull/1664
+	archive_write_set_filter_option(archive, "xz", "compression-level", "9");
+	archive_write_set_filter_option(archive, "xz", "threads", "0"); // fixed as of https://github.com/libarchive/libarchive/pull/1664
 
 	if (archive_write_open(archive, &state, do_out_open_cb, do_out_write_cb, do_out_close_cb) < 0) {
 		errx(EXIT_FAILURE, "archive_write_open: %s", archive_error_string(archive));
@@ -1332,10 +1369,14 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:e:lo:r:st:")) != -1) {
+	while ((c = getopt(argc, argv, "c:e:lo:pr:st:")) != -1) {
 		// general options
 
-		if (c == 'r') {
+		if (c == 'p') {
+			persist = true;
+		}
+
+		else if (c == 'r') {
 			base_path = optarg;
 		}
 

@@ -4,3 +4,5 @@ bin/
 rootfs/
 *.out
 *.core
+aquarium
+*.txz

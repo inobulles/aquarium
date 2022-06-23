@@ -6,6 +6,7 @@
 //  - better way of copying over linux-nvidia-libs (probably best to build the package in a way which assumes it's installing to a Linux install right off the bat, and then have some kind of aquarium mechanism to install packages like 'aquarium -p my-aquarium linux-nvidia-libs-510.39.01.pkg' or something)
 //  - better solution than the 'compat.linux.emul_path' sysctl from FreeBSD, because that's super limited
 //  - may be interesting to replace instances of fgets with fparseln
+//  - remove jails when sweeping (based on hash of aquarium path)
 
 // building:
 // $ cc aquarium.c -larchive -lfetch -lcrypto -lcopyfile -ljail -o aquarium
@@ -114,9 +115,11 @@ __FBSDID("$FreeBSD$");
 	(struct iovec) { .iov_base = (name), .iov_len = strlen((name)) + 1 }, \
 	(struct iovec) { .iov_base = (val ), .iov_len = strlen((val )) + 1 }
 
-#define JAILPARAM(i, key, val) \
-	jailparam_init  (&args[(i)], (key)); \
-	jailparam_import(&args[(i)], (val));
+#define JAILPARAM(key, val) \
+	jailparam_init  (&args[args_len], (key)); \
+	jailparam_import(&args[args_len], (val)); \
+	\
+	args_len++;
 
 // options
 
@@ -125,6 +128,7 @@ static char* path = NULL;
 
 static bool persist = false;
 static char* base_path = DEFAULT_BASE_PATH;
+static bool vnet_disable = false;
 
 static char* templates_path;
 static char* aquariums_path;
@@ -137,7 +141,7 @@ static void __dead2 usage(void) {
 		"usage: %1$s [-r base]\n"
 		"       %1$s [-r base] -c path [-t template]\n"
 		"       %1$s [-r base] -o path [-t template]\n"
-		"       %1$s [-r base] [-p] -e path\n"
+		"       %1$s [-r base] [-p] [-v] -e path\n"
 		"       %1$s [-r base] -l\n"
 		"       %1$s [-r base] -s\n",
 	getprogname());
@@ -154,7 +158,7 @@ static inline char* __hash(char* str) { // djb2 algorithm
 		hash = ((hash << 5) + hash) + *str++;
 	}
 
-	asprintf(&str, "%lx", hash);
+	asprintf(&str, "aquarium-%lx", hash);
 	return str;
 }
 
@@ -714,21 +718,17 @@ static int do_create(void) {
 	//  - the various keys you can use for jailparams can be found in 'usr.sbin/jail/config.c', and they are the ones *without* the 'PF_INTERNAL' flag
 	//  - those which do have the 'PF_INTERNAL' flag (e.g. "mount.devfs" & "vnet.interface") are generally dished out to external commands (which can be found in 'usr.sbin/jail/command.c')
 
-	struct jailparam args[7] = { 0 };
+	struct jailparam args[16] = { 0 };
+	size_t args_len = 0;
 
-	JAILPARAM(0, "name", __hash(aquarium_path)) // don't care about freeing
-	JAILPARAM(1, "path", aquarium_path)
-	JAILPARAM(2, "host", NULL)
-	JAILPARAM(3, "host.hostname", name)
-	JAILPARAM(4, "vnet", NULL)
-	JAILPARAM(5, "allow.raw_sockets", "true") // allow for sending ICMP packets (for ping)
-	JAILPARAM(6, "allow.socket_af", "true")
+	JAILPARAM("name", __hash(aquarium_path)) // don't care about freeing
+	JAILPARAM("path", aquarium_path)
 
-	if (jailparam_set(args, sizeof(args) / sizeof(*args), JAIL_CREATE | JAIL_ATTACH) < 0) {
+	if (jailparam_set(args, args_len, JAIL_CREATE | JAIL_ATTACH) < 0) {
 		errx(EXIT_FAILURE, "jailparam_set: %s (%s)", strerror(errno), jail_errmsg);
 	}
 
-	jailparam_free(args, sizeof(args) / sizeof(*args));
+	jailparam_free(args, args_len);
 
 	// fork the process and run that initial setup script
 	// then, wait for it to finish parent-side (and check for errors blah blah)
@@ -972,20 +972,26 @@ found:
 		hostname = path;
 	}
 
-	struct jailparam args[8] = { 0 };
-	size_t args_len = 7;
+	struct jailparam args[16] = { 0 };
+	size_t args_len = 0;
 
-	JAILPARAM(0, "name", __hash(aquarium_path))
-	JAILPARAM(1, "path", aquarium_path)
-	JAILPARAM(2, "host", NULL)
-	JAILPARAM(3, "host.hostname", hostname)
-	JAILPARAM(4, "vnet", NULL)
-	JAILPARAM(5, "allow.raw_sockets", "true") // allow for sending ICMP packets (for ping)
-	JAILPARAM(6, "allow.socket_af", "true")
+	JAILPARAM("name", __hash(aquarium_path))
+	JAILPARAM("path", aquarium_path)
+	JAILPARAM("host.hostname", hostname)
+	JAILPARAM("allow.raw_sockets", "true") // allow for sending ICMP packets (for ping)
+	JAILPARAM("allow.socket_af", "true")
+
+	if (!vnet_disable) {
+		JAILPARAM("vnet", NULL)
+	}
+
+	else {
+		JAILPARAM("ip4", "inherit")
+		JAILPARAM("ip6", "inherit")
+	}
 
 	if (persist) {
-		JAILPARAM(7, "persist", NULL)
-		args_len++;
+		JAILPARAM("persist", NULL)
 	}
 
 	if (jailparam_set(args, args_len, JAIL_CREATE | JAIL_ATTACH) < 0) {
@@ -1369,7 +1375,7 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:e:lo:pr:st:")) != -1) {
+	while ((c = getopt(argc, argv, "c:e:lo:pr:st:v")) != -1) {
 		// general options
 
 		if (c == 'p') {
@@ -1378,6 +1384,10 @@ int main(int argc, char* argv[]) {
 
 		else if (c == 'r') {
 			base_path = optarg;
+		}
+
+		else if (c == 'v') {
+			vnet_disable = true;
 		}
 
 		// action options

@@ -63,6 +63,7 @@ __FBSDID("$FreeBSD$");
 
 #include <err.h>
 #include <fcntl.h>
+#include <fts.h>
 #include <grp.h>
 #include <paths.h>
 #include <pwd.h>
@@ -82,6 +83,7 @@ __FBSDID("$FreeBSD$");
 #include <time.h>
 
 #include <archive.h>
+#include <archive_entry.h>
 #include <copyfile.h>
 #include <jail.h>
 #include <fetch.h>
@@ -1170,6 +1172,10 @@ static int do_out_close_cb(struct archive* archive, void* _state) {
 	return ARCHIVE_OK;
 }
 
+static int do_out_fts_compar(const FTSENT* const* x, const FTSENT* const* y) {
+	return strcmp((*x)->fts_name, (*y)->fts_name);
+}
+
 static int do_out(void) {
 	// read the pointer file
 
@@ -1230,27 +1236,84 @@ found:
 	fclose(fp);
 
 	// create template
+	// it is important to specify the 'FTS_NOCHDIR' flag, at the expense of performance
+	// as per archive_write_disk(3)'s "BUGS" section, we mustn't call 'chdir' between opening and closing archive objects
+	// we could enable 'FTS_NOSTAT' to improve performance, but we're anyway going to need it for creating archive entries
+
+	char* abs_template;
+	asprintf(&abs_template, "%s/%s", getcwd(NULL, 0), template); // don't care about freeing this for now
+
+	if (chdir(aquarium_path) < 0) {
+		errx(EXIT_FAILURE, "chdir: %s", strerror(errno));
+	}
+
+	char* path_argv[] = { ".", NULL };
+	FTS* fts = fts_open(path_argv, FTS_COMFOLLOW | FTS_NOCHDIR | FTS_XDEV, &do_out_fts_compar);
+
+	if (!fts) {
+		errx(EXIT_FAILURE, "fts_open(\"%s\"): %s", abs_path, strerror(errno));
+	}
+
 	// try to deduce compression format to use based on file extension, and if that fails, default to XZ compression
 
 	do_out_state_t state = {
-		.out = template
+		.out = abs_template
 	};
 
 	struct archive* archive = archive_write_new();
 
-	if (archive_write_set_format_filter_by_ext(archive, template) != ARCHIVE_OK) {
-		archive_write_add_filter_xz (archive); // archive_write_filter(3)
-		archive_write_set_format_pax(archive); // archive_write_format(3)
+	// if (archive_write_set_format_filter_by_ext(archive, strrchr(template, '.')) != ARCHIVE_OK) {
+		archive_write_add_filter_xz   (archive); // archive_write_filter(3)
+		archive_write_set_format_ustar(archive); // archive_write_format(3)
+	// }
+
+	archive_write_set_filter_option(archive, NULL, "compression-level", "9");
+	archive_write_set_filter_option(archive, NULL, "threads", "0"); // fixed as of https://github.com/libarchive/libarchive/pull/1664
+
+	if (archive_write_open(archive, &state, do_out_open_cb, do_out_write_cb, do_out_close_cb) < 0) {
+		errx(EXIT_FAILURE, "archive_write_open: %s", archive_error_string(archive));
 	}
 
-	archive_write_open(archive, &state, do_out_open_cb, do_out_write_cb, do_out_close_cb);
+	FTSENT* node;
 
-	// TODO walk across all files in the aquarium
-	//      check out the example in archive_write(3) for what to do next
+	while ((node = fts_read(fts))) {
+		if (node->fts_info != FTS_F) {
+			continue;
+		}
 
+		// write header
+
+		struct archive_entry* entry = archive_entry_new();
+
+		archive_entry_copy_stat(entry, node->fts_statp);
+		archive_entry_set_pathname(entry, node->fts_path);
+
+		archive_write_header(archive, entry);
+		archive_entry_free(entry);
+
+		// write file content
+
+		int fd;
+
+		if ((fd = open(node->fts_path, O_RDONLY)) < 0) {
+			warnx("open(\"%s\"): %s", node->fts_path, strerror(errno));
+			continue;
+		}
+
+		size_t len;
+		char buf[ARCHIVE_CHUNK_BYTES];
+
+		while ((len = read(fd, buf, sizeof buf)) > 0) {
+			archive_write_data(archive, buf, len);
+		}
+
+		close(fd);
+	}
+
+	fts_close(fts);
 	archive_write_free(archive);
 
-	return EXIT_FAILURE;
+	return EXIT_SUCCESS;
 }
 
 // main function
@@ -1289,6 +1352,7 @@ int main(int argc, char* argv[]) {
 
 		else if (c == 'o') {
 			action = do_out;
+			path = optarg;
 		}
 
 		else if (c == 's') {

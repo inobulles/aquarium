@@ -64,7 +64,6 @@ __FBSDID("$FreeBSD$");
 
 #include <err.h>
 #include <fcntl.h>
-#include <fts.h>
 #include <grp.h>
 #include <paths.h>
 #include <pwd.h>
@@ -107,7 +106,7 @@ __FBSDID("$FreeBSD$");
 
 #define PROGRESS_FREQUENCY  (1 << 22)
 #define FETCH_CHUNK_BYTES   (1 << 16)
-#define ARCHIVE_CHUNK_BYTES (1 << 12)
+#define ARCHIVE_CHUNK_BYTES (1 << 16)
 
 // macros
 
@@ -1208,15 +1207,11 @@ static la_ssize_t do_out_write_cb(struct archive* archive, void* _state, const v
 static int do_out_close_cb(struct archive* archive, void* _state) {
 	do_out_state_t* state = _state;
 
-	if (state->fd > 0) {
+	if (state->fd >= 0) {
 		close(state->fd);
 	}
 
 	return ARCHIVE_OK;
-}
-
-static int do_out_fts_compar(const FTSENT* const* x, const FTSENT* const* y) {
-	return strcmp((*x)->fts_name, (*y)->fts_name);
 }
 
 static int do_out(void) {
@@ -1279,9 +1274,6 @@ found:
 	fclose(fp);
 
 	// create template
-	// it is important to specify the 'FTS_NOCHDIR' flag, at the expense of performance
-	// as per archive_write_disk(3)'s "BUGS" section, we mustn't call 'chdir' between opening and closing archive objects
-	// we could enable 'FTS_NOSTAT' to improve performance, but we're anyway going to need it for creating archive entries
 
 	char* abs_template;
 	asprintf(&abs_template, "%s/%s", getcwd(NULL, 0), template); // don't care about freeing this for now
@@ -1290,11 +1282,13 @@ found:
 		errx(EXIT_FAILURE, "chdir: %s", strerror(errno));
 	}
 
-	char* path_argv[] = { ".", NULL };
-	FTS* fts = fts_open(path_argv, FTS_COMFOLLOW | FTS_NOCHDIR | FTS_XDEV, &do_out_fts_compar);
+	struct archive* disk = archive_read_disk_new();
 
-	if (!fts) {
-		errx(EXIT_FAILURE, "fts_open(\"%s\"): %s", abs_path, strerror(errno));
+	archive_read_disk_set_standard_lookup(disk);
+	archive_read_disk_set_behavior(disk, ARCHIVE_READDISK_NO_TRAVERSE_MOUNTS);
+
+	if (archive_read_disk_open(disk, ".") != ARCHIVE_OK) {
+		errx(EXIT_FAILURE, "archive_read_disk_open: %s", archive_error_string(disk));
 	}
 
 	// try to deduce compression format to use based on file extension, and if that fails, default to XZ compression
@@ -1315,40 +1309,48 @@ found:
 		errx(EXIT_FAILURE, "archive_write_open: %s", archive_error_string(archive));
 	}
 
-	FTSENT* node;
-
-	while ((node = fts_read(fts))) {
-		if (
-			node->fts_info != FTS_F &&
-			node->fts_info != FTS_D
-		) {
-			continue;
-		}
-
-		// write header
+	for (;;) {
+		// read next file and write entry
 
 		struct archive_entry* entry = archive_entry_new();
+		int rv = archive_read_next_header2(disk, entry);
 
-		archive_entry_copy_stat(entry, node->fts_statp);
-		archive_entry_set_pathname(entry, node->fts_path);
+		if (rv == ARCHIVE_EOF) {
+			break;
+		}
 
-		archive_write_header(archive, entry);
-		archive_entry_free(entry);
+		if (rv != ARCHIVE_OK) {
+			errx(EXIT_FAILURE, "archive_read_next_header2: %s", archive_error_string(disk));
+		}
+
+		archive_read_disk_descend(disk);
+		rv = archive_write_header(archive, entry);
+
+		if (rv == ARCHIVE_FATAL) {
+			errx(EXIT_FAILURE, "archive_write_header: %s", archive_error_string(archive));
+		}
+
+		if (rv < ARCHIVE_OK) {
+			warnx("archive_write_header: %s", archive_error_string(archive));
+		}
+
+		if (rv <= ARCHIVE_FAILED) {
+			goto finish_entry;
+		}
 
 		// write file content
 
-		if (node->fts_info != FTS_F) {
-			continue;
-		}
+		const char* path = archive_entry_sourcepath(entry);
+		printf("%s\n", path + 2);
 
 		int fd;
 
-		if ((fd = open(node->fts_path, O_RDONLY)) < 0) {
-			warnx("open(\"%s\"): %s", node->fts_path, strerror(errno));
-			continue;
+		if ((fd = open(path, O_RDONLY)) < 0) {
+			warnx("open(\"%s\"): %s", path, strerror(errno));
+			goto finish_entry;
 		}
 
-		size_t len;
+		ssize_t len;
 		char buf[ARCHIVE_CHUNK_BYTES];
 
 		while ((len = read(fd, buf, sizeof buf)) > 0) {
@@ -1356,9 +1358,16 @@ found:
 		}
 
 		close(fd);
+
+	finish_entry:
+
+		archive_entry_free(entry);
 	}
 
-	fts_close(fts);
+	archive_read_close(disk);
+	archive_read_free(disk);
+
+	archive_write_close(archive);
 	archive_write_free(archive);
 
 	return EXIT_SUCCESS;

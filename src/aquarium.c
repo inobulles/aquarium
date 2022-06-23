@@ -1277,7 +1277,10 @@ found:
 	FTSENT* node;
 
 	while ((node = fts_read(fts))) {
-		if (node->fts_info != FTS_F) {
+		if (
+			node->fts_info != FTS_F &&
+			node->fts_info != FTS_D
+		) {
 			continue;
 		}
 
@@ -1292,6 +1295,10 @@ found:
 		archive_entry_free(entry);
 
 		// write file content
+
+		if (node->fts_info != FTS_F) {
+			continue;
+		}
 
 		int fd;
 

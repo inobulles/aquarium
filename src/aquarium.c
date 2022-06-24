@@ -846,16 +846,14 @@ found:
 		errx(EXIT_FAILURE, "nmount: failed to mount devfs: %s", strerror(errno));
 	}
 
-	// mount nullfs filesystem for /tmp
-	// this will link the contents of /tmp between the aquarium and the host
+	// mount tmpfs filesystem for /tmp
 	// we don't wanna overwrite anything potentially already inside of /tmp
 	// to do that, the manual (nmount(2)) suggests we use the MNT_EMPTYDIR flag
 	// there seem to be a few inconsistencies vis-à-vis the type of 'flags', so instead we can simply use the 'emptydir' iov (as can be seen in '/usr/include/sys/mount.h')
 
 	struct iovec iov_tmp[] = {
-		IOV("fstype", "nullfs"),
+		IOV("fstype", "tmpfs"),
 		IOV("fspath", "tmp"),
-		IOV("target", "/tmp"),
 		IOV("emptydir", ""),
 	};
 

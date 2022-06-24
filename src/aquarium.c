@@ -70,6 +70,7 @@ __FBSDID("$FreeBSD$");
 
 #include <sys/param.h>
 
+#include <sys/ioctl.h>
 #include <sys/jail.h>
 #include <sys/linker.h>
 #include <sys/mount.h>
@@ -88,6 +89,7 @@ __FBSDID("$FreeBSD$");
 #include <jail.h>
 #include <fetch.h>
 
+#include <fs/devfs/devfs.h>
 #include <openssl/sha.h>
 
 // defines
@@ -846,6 +848,35 @@ found:
 		errx(EXIT_FAILURE, "nmount: failed to mount devfs: %s", strerror(errno));
 	}
 
+	// set the correct ruleset for devfs
+	// we necessarily need to start by hiding everything for some reason
+
+	int devfs_fd = open("dev", O_RDONLY);
+
+	if (devfs_fd < 0) {
+		errx(EXIT_FAILURE, "open(\"dev\"): %s", strerror(errno));
+	}
+
+	devfs_rsnum ruleset = 1;
+
+	if (ioctl(devfs_fd, DEVFSIO_SAPPLY, &ruleset) < 0) {
+		errx(EXIT_FAILURE, "DEVFSIO_SAPPLY: %s", strerror(errno));
+	}
+
+	ruleset = 2;
+
+	if (ioctl(devfs_fd, DEVFSIO_SAPPLY, &ruleset) < 0) {
+		errx(EXIT_FAILURE, "DEVFSIO_SAPPLY: %s", strerror(errno));
+	}
+
+	ruleset = 3;
+
+	if (ioctl(devfs_fd, DEVFSIO_SAPPLY, &ruleset) < 0) {
+		errx(EXIT_FAILURE, "DEVFSIO_SAPPLY: %s", strerror(errno));
+	}
+
+	close(devfs_fd);
+
 	// mount tmpfs filesystem for /tmp
 	// we don't wanna overwrite anything potentially already inside of /tmp
 	// to do that, the manual (nmount(2)) suggests we use the MNT_EMPTYDIR flag
@@ -883,6 +914,7 @@ found:
 		}
 
 		// mount fdescfs (with linrdlnk)
+		// ignore errors, because we may be prevented from mounting by the devfs ruleset
 
 		struct iovec iov_fd[] = {
 			IOV("fstype", "fdescfs"),
@@ -890,9 +922,7 @@ found:
 			IOV("linrdlnk", ""),
 		};
 
-		if (nmount(iov_fd, sizeof(iov_fd) / sizeof(*iov_fd), 0) < 0) {
-			errx(EXIT_FAILURE, "nmount: failed to mount fdescfs: %s", strerror(errno));
-		}
+		nmount(iov_fd, sizeof(iov_fd) / sizeof(*iov_fd), 0);
 
 		// mount linprocfs
 
@@ -919,15 +949,14 @@ found:
 
 	else {
 		// mount fdescfs
+		// ignore errors, because we may be prevented from mounting by the devfs ruleset
 
 		struct iovec iov_fd[] = {
 			IOV("fstype", "fdescfs"),
 			IOV("fspath", "dev/fd"),
 		};
 
-		if (nmount(iov_fd, sizeof(iov_fd) / sizeof(*iov_fd), 0) < 0) {
-			errx(EXIT_FAILURE, "nmount: failed to mount fdescfs: %s", strerror(errno));
-		}
+		nmount(iov_fd, sizeof(iov_fd) / sizeof(*iov_fd), 0);
 
 		// mount procfs
 
@@ -975,6 +1004,8 @@ found:
 	JAILPARAM("name", __hash(aquarium_path))
 	JAILPARAM("path", aquarium_path)
 	JAILPARAM("host.hostname", hostname)
+	JAILPARAM("allow.mount", "false")
+	JAILPARAM("allow.mount.devfs", "false")
 	JAILPARAM("allow.raw_sockets", "true") // allow for sending ICMP packets (for ping)
 	JAILPARAM("allow.socket_af", "true")
 

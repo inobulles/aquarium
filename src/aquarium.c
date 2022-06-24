@@ -902,6 +902,7 @@ found:
 
 		// mount /dev/shm as tmpfs
 		// on linux, this needs to have mode 1777
+		// ignore ENOENT, because we may be prevented from mounting by the devfs ruleset
 
 		struct iovec iov_shm[] = {
 			IOV("fstype", "tmpfs"),
@@ -909,12 +910,12 @@ found:
 			IOV("mode", "1777"),
 		};
 
-		if (nmount(iov_shm, sizeof(iov_shm) / sizeof(*iov_shm), 0) < 0) {
+		if (nmount(iov_shm, sizeof(iov_shm) / sizeof(*iov_shm), 0) < 0 && errno != ENOENT) {
 			errx(EXIT_FAILURE, "nmount: failed to mount shm tmpfs: %s", strerror(errno));
 		}
 
 		// mount fdescfs (with linrdlnk)
-		// ignore errors, because we may be prevented from mounting by the devfs ruleset
+		// ignore ENOENT, because we may be prevented from mounting by the devfs ruleset
 
 		struct iovec iov_fd[] = {
 			IOV("fstype", "fdescfs"),
@@ -922,7 +923,9 @@ found:
 			IOV("linrdlnk", ""),
 		};
 
-		nmount(iov_fd, sizeof(iov_fd) / sizeof(*iov_fd), 0);
+		if (nmount(iov_fd, sizeof(iov_fd) / sizeof(*iov_fd), 0) < 0 && errno != ENOENT) {
+			errx(EXIT_FAILURE, "nmount: failed to mount fdescfs: %s", strerror(errno));
+		}
 
 		// mount linprocfs
 
@@ -949,14 +952,16 @@ found:
 
 	else {
 		// mount fdescfs
-		// ignore errors, because we may be prevented from mounting by the devfs ruleset
+		// ignore ENOENT, because we may be prevented from mounting by the devfs ruleset
 
 		struct iovec iov_fd[] = {
 			IOV("fstype", "fdescfs"),
 			IOV("fspath", "dev/fd"),
 		};
 
-		nmount(iov_fd, sizeof(iov_fd) / sizeof(*iov_fd), 0);
+		if (nmount(iov_fd, sizeof(iov_fd) / sizeof(*iov_fd), 0) < 0 && errno != ENOENT) {
+			errx(EXIT_FAILURE, "nmount: failed to mount fdescfs: %s", strerror(errno));
+		}
 
 		// mount procfs
 

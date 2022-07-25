@@ -125,6 +125,7 @@
 static char* template = "amd64.aquabsd.0622a";
 static char* kernel_template = NULL;
 
+static char* out_path = NULL;
 static char* path = NULL;
 
 static bool persist = false;
@@ -142,7 +143,8 @@ static void __dead2 usage(void) {
 	fprintf(stderr,
 		"usage: %1$s [-r base]\n"
 		"       %1$s [-r base] -c path [-t template] [-k kernel_template]\n"
-		"       %1$s [-r base] -o path [-t template] [-k kernel_template]\n"
+		"       %1$s [-r base] -T path [-o template]\n"
+		"       %1$s [-r base] -i path [-o image]\n"
 		"       %1$s [-r base] [-p] [-v] -e path\n"
 		"       %1$s [-r base] -l\n"
 		"       %1$s [-r base] -s\n",
@@ -1409,7 +1411,7 @@ found:
 	// create template
 
 	char* abs_template;
-	asprintf(&abs_template, "%s/%s", getcwd(NULL, 0), template); // don't care about freeing this for now
+	asprintf(&abs_template, "%s/%s", getcwd(NULL, 0), out_path); // don't care about freeing this for now
 
 	if (chdir(aquarium_path) < 0) {
 		errx(EXIT_FAILURE, "chdir: %s", strerror(errno));
@@ -1517,7 +1519,7 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:e:k:lo:pr:st:v")) != -1) {
+	while ((c = getopt(argc, argv, "c:e:i:k:lo:pr:st:T:v")) != -1) {
 		// general options
 
 		if (c == 'p') {
@@ -1548,13 +1550,13 @@ int main(int argc, char* argv[]) {
 			action = do_list_templates;
 		}
 
-		else if (c == 'o') {
-			action = do_out;
-			path = optarg;
-		}
-
 		else if (c == 's') {
 			action = do_sweep;
+		}
+
+		else if (c == 'T') {
+			action = do_out;
+			path = optarg;
 		}
 
 		// name-passing options
@@ -1565,6 +1567,10 @@ int main(int argc, char* argv[]) {
 
 		else if (c == 't') {
 			template = optarg;
+		}
+
+		else if (c == 'o') {
+			out_path = optarg;
 		}
 
 		else {

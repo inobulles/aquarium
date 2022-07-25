@@ -580,7 +580,7 @@ static inline void __extract_template(const char* aquarium_path, const char* nam
 	char* template_path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
 	asprintf(&template_path, "%s%s.txz", search_path, name);
 
-	if (access(template_path, R_OK) < 0) {
+	if (access(template_path, F_OK) < 0) {
 		// file template doesn't yet exist; download & check it
 		__download_template(search_path, template, kind);
 	}
@@ -656,27 +656,36 @@ static int do_create(void) {
 		errx(EXIT_FAILURE, "mkdtemp: failed to create aquarium directory: %s", strerror(errno));
 	}
 
-	// write to pointer file
-
-	FILE* fp = fopen(path, "wx");
-
-	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", path, strerror(errno));
-	}
-
-	fprintf(fp, "%s", aquarium_path);
-	fclose(fp);
-
 	// check that pointer file isn't already in the aquarium database
+	// if it doesn't yet exist, the 'realpath' call will fail (which we don't want if 'flags & FLAGS_CREATE')
+	// although it's cumbersome, I really wanna use realpath here to reduce points of failure
+	// to be honest, I think it's a mistake not to have included a proper way of checking path hierarchy in POSIX
+
 	// TODO haven't yet thought about how safe this'd be, but since the aquarium database also contains what the pointer file was supposed to point to, maybe it could be cool for this to automatically regenerate the pointer file instead of erroring?
+
+	bool no_exist = access(path, F_OK) < 0;
+	int fd;
+
+	if (no_exist) {
+		fd = open(path, O_CREAT, 0 /* don't care about mode */);
+
+		if (!fd) {
+			errx(EXIT_FAILURE, "open(\"%s\"): %s", path, strerror(errno));
+		}
+	}
 
 	char* abs_path = realpath(path, NULL);
 
-	if (!abs_path) {
-		errx(EXIT_FAILURE, "realpath: %s", strerror(errno));
+	if (no_exist) {
+		close(fd);
+		remove(path);
 	}
 
-	/* FILE* */ fp = fopen(aquarium_db_path, "r");
+	if (!abs_path) {
+		errx(EXIT_FAILURE, "realpath(\"%s\"): %s", path, strerror(errno));
+	}
+
+	FILE* fp = fopen(aquarium_db_path, "r");
 
 	if (!fp) {
 		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", aquarium_db_path, strerror(errno));
@@ -815,6 +824,17 @@ static int do_create(void) {
 		errx(EXIT_FAILURE, "setuid: %s", strerror(errno));
 	}
 
+	// write to pointer file
+
+	/* FILE* */ fp = fopen(path, "wx");
+
+	if (!fp) {
+		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", path, strerror(errno));
+	}
+
+	fprintf(fp, "%s", aquarium_path);
+	fclose(fp);
+
 	return EXIT_SUCCESS;
 }
 
@@ -852,7 +872,7 @@ static int do_enter(void) {
 	char* abs_path = realpath(path, NULL);
 
 	if (!abs_path) {
-		errx(EXIT_FAILURE, "realpath: %s", strerror(errno));
+		errx(EXIT_FAILURE, "realpath(\"%s\"): %s", path, strerror(errno));
 	}
 
 	/* FILE* */ fp = fopen(aquarium_db_path, "r");
@@ -1177,7 +1197,7 @@ static int do_sweep(void) {
 
 		// if we can't find pointer file, remove the aquarium and that entry from the aquarium database
 
-		if (access(ent.pointer_path, R_OK) < 0) {
+		if (access(ent.pointer_path, F_OK) < 0) {
 			__remove_aquarium(ent.aquarium_path);
 
 			// discard this entry obviously, we don't want nuffin to do with it no more 😡
@@ -1188,7 +1208,7 @@ static int do_sweep(void) {
 		// if we can't find aquarium, remove the pointer file and that entry from the aquarium database
 		// not sure under which circumstances this kind of stuff could happen, but handle it anyway
 
-		if (access(ent.aquarium_path, R_OK) < 0) {
+		if (access(ent.aquarium_path, F_OK) < 0) {
 			// attempt to remove the pointer file
 			// we don't care to do anything on error, because the file may very well have already been removed by the user
 
@@ -1342,7 +1362,7 @@ static int do_out(void) {
 	char* abs_path = realpath(path, NULL);
 
 	if (!abs_path) {
-		errx(EXIT_FAILURE, "realpath: %s", strerror(errno));
+		errx(EXIT_FAILURE, "realpath(\"%s\"): %s", path, strerror(errno));
 	}
 
 	/* FILE* */ fp = fopen(aquarium_db_path, "r");

@@ -859,7 +859,7 @@ static int do_create(void) {
 //  - link (or bind mount) necessary directories (/dev, /tmp if specified, &c)
 //  - actually enter the aquarium
 
-static int do_enter(void) {
+static inline char* __read_pointer_file(void) {
 	// read the pointer file
 
 	FILE* fp = fopen(path, "r");
@@ -917,6 +917,12 @@ found:
 
 	free(abs_path);
 	fclose(fp);
+
+	return aquarium_path;
+}
+
+static int do_enter(void) {
+	char* aquarium_path = __read_pointer_file();
 
 	// change into the aquarium directory
 
@@ -1350,63 +1356,7 @@ static int do_out_close_cb(struct archive* archive, void* _state) {
 }
 
 static int do_out(void) {
-	// read the pointer file
-
-	FILE* fp = fopen(path, "r");
-
-	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", path, strerror(errno));
-	}
-
-	fseek(fp, 0, SEEK_END);
-	size_t len = ftell(fp);
-
-	rewind(fp);
-
-	char* aquarium_path = malloc(len + 1);
-	aquarium_path[len] = 0;
-
-	if (fread(aquarium_path, 1, len, fp) != len) {
-		errx(EXIT_FAILURE, "fread: %s", strerror(errno));
-	}
-
-	fclose(fp);
-
-	// make sure the path of the pointer file is well the one contained in the relevant entry of the aquarium database
-
-	char* abs_path = realpath(path, NULL);
-
-	if (!abs_path) {
-		errx(EXIT_FAILURE, "realpath(\"%s\"): %s", path, strerror(errno));
-	}
-
-	/* FILE* */ fp = fopen(aquarium_db_path, "r");
-
-	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", aquarium_db_path, strerror(errno));
-	}
-
-	char buf[1024];
-	db_ent_t ent;
-
-	while (next_db_ent(&ent, sizeof buf, buf, fp, true)) {
-		if (strcmp(ent.pointer_path, abs_path)) {
-			continue;
-		}
-
-		if (strcmp(ent.aquarium_path, aquarium_path)) {
-			errx(EXIT_FAILURE, "Found pointer file in the aquarium database, but it doesn't point to the correct aquarium (%s vs %s)", aquarium_path, ent.aquarium_path);
-		}
-
-		goto found;
-	}
-
-	errx(EXIT_FAILURE, "Could not find pointer file %s in the aquarium database", abs_path);
-
-found:
-
-	free(abs_path);
-	fclose(fp);
+	char* aquarium_path = __read_pointer_file();
 
 	// create template
 
@@ -1508,6 +1458,13 @@ found:
 	return EXIT_SUCCESS;
 }
 
+// outputting aquariums as images
+//  - check if there's a kernel (how??)
+
+static int do_img_out(void) {
+	return EXIT_FAILURE;
+}
+
 // main function
 
 typedef int (*action_t) (void);
@@ -1543,6 +1500,11 @@ int main(int argc, char* argv[]) {
 
 		else if (c == 'e') {
 			action = do_enter;
+			path = optarg;
+		}
+
+		else if (c == 'i') {
+			action = do_img_out;
 			path = optarg;
 		}
 

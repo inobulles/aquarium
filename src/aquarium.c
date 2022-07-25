@@ -1459,9 +1459,31 @@ static int do_out(void) {
 }
 
 // outputting aquariums as images
-//  - check if there's a kernel (how??)
+//  - make sure '/etc/fstab' is setup correctly to mount the root filesystem & ESP (EFI System Partition)
+//  - create UFS2 filesystem image with the contents of the aquarium
+//  - create ESP filesystem image (FAT12) with the EFI loader
+//  - combine all that together into a final image, which uses the GPT partition scheme (and also installs gptboot(8) in the MBR boot sector for BIOS booting on legacy systems - something aquabsd-installer should be doing too!)
 
 static int do_img_out(void) {
+	char* aquarium_path = __read_pointer_file();
+
+	const char* rootfs_label = "aquabsd-rootfs"; // TODO this should be an option
+	const char* esp_label = "aquabsd-esp";
+
+	const char* esp_oem = "AQUABSD "; // must be 8 chars
+	const char* esp_vol_label = "AQUABSD-ESP";
+
+	// % echo "/dev/gpt/$rootfs_label / ufs ro,noatime 1 1" > $aquarium_path/etc/fstab
+	// % echo "/dev/gpt/$esp_label /boot/efi msdosfs ro,noatime 0 0" >> $aquarium_path/etc/fstab
+
+	// % makefs -ZB little -o label=$label -o version=2 $rootfs_label.img $aquarium_path
+
+	// see aquabsd-installer on how to stage the ESP partition (with 'EFI/BOOT/BOOTX64.EFI', gotten from '$aquarium_path/boot/loader.efi')
+	// TODO nonsensical error when omitting size option from makefs (the whole tool is kinda a mess tbh)
+	// % makefs -t msdos -o fat_type=12 -o sectors_per_cluster=1 -o OEM_string="$esp_oem" -o volume_label=$esp_vol_label -s 1m $esp_label.img /tmp/efi-XXXXXXX
+
+	// % mkimg -s gpt -f raw -b $aquarium_path/boot/pmbr -p freebsd-boot/bootfs:=$aquarium_path/boot/gptboot -p efi/$esp_label:=$esp_label.img -p freebsd-ufs/$rootfs_label:=$rootfs_label.img -o $out_path
+
 	return EXIT_FAILURE;
 }
 

@@ -582,7 +582,7 @@ static inline void __extract_template(const char* aquarium_path, const char* nam
 
 	if (access(template_path, F_OK) < 0) {
 		// file template doesn't yet exist; download & check it
-		__download_template(search_path, template, kind);
+		__download_template(search_path, name, kind);
 	}
 
 	// make & change into final aquarium directory

@@ -645,6 +645,14 @@ static int do_create(void) {
 		errx(EXIT_FAILURE, "%s template is illegal (starts with ILLEGAL_TEMPLATE_PREFIX, '%c'). Someone may be trying to swindle you!", template, ILLEGAL_TEMPLATE_PREFIX);
 	}
 
+	// remember our current working directory for later
+
+	char* cwd = getcwd(NULL, 0);
+
+	if (!cwd) {
+		errx(EXIT_FAILURE, "getcwd: %s", strerror(errno));
+	}
+
 	// generate final aquarium path
 
 	char* aquarium_path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
@@ -787,26 +795,27 @@ static int do_create(void) {
 	// a few considerations here, because it seems appropriate to make these public:
 	//  - the various keys you can use for jailparams can be found in 'usr.sbin/jail/config.c', and they are the ones *without* the 'PF_INTERNAL' flag
 	//  - those which do have the 'PF_INTERNAL' flag (e.g. "mount.devfs" & "vnet.interface") are generally dished out to external commands (which can be found in 'usr.sbin/jail/command.c')
+	//  - this is done in a separate process, because we still want to come back to the original CWD to create the pointer file
 
-	struct jailparam args[16] = { 0 };
-	size_t args_len = 0;
-
-	JAILPARAM("name", __hash(aquarium_path)) // don't care about freeing
-	JAILPARAM("path", aquarium_path)
-
-	if (jailparam_set(args, args_len, JAIL_CREATE | JAIL_ATTACH) < 0) {
-		errx(EXIT_FAILURE, "jailparam_set: %s (%s)", strerror(errno), jail_errmsg);
-	}
-
-	jailparam_free(args, args_len);
-
-	// fork the process and run that initial setup script
+	// fork the process and actually create that jail and run that initial setup script
 	// then, wait for it to finish parent-side (and check for errors blah blah)
 
 	pid_t setup_pid = fork();
 
 	if (!setup_pid) {
 		// child process here
+
+		struct jailparam args[16] = { 0 };
+		size_t args_len = 0;
+
+		JAILPARAM("name", __hash(aquarium_path)) // don't care about freeing
+		JAILPARAM("path", aquarium_path)
+
+		if (jailparam_set(args, args_len, JAIL_CREATE | JAIL_ATTACH) < 0) {
+			errx(EXIT_FAILURE, "jailparam_set: %s (%s)", strerror(errno), jail_errmsg);
+		}
+
+		jailparam_free(args, args_len);
 
 		execl("/bin/sh", "/bin/sh", "-c", setup_script, NULL);
 		_exit(EXIT_FAILURE);
@@ -824,7 +833,11 @@ static int do_create(void) {
 		errx(EXIT_FAILURE, "setuid: %s", strerror(errno));
 	}
 
-	// write to pointer file
+	// change back to where we were and write to pointer file
+
+	if (chdir(cwd) < 0) {
+		errx(EXIT_FAILURE, "chdir(\"%s\"): %s", cwd, strerror(errno));
+	}
 
 	/* FILE* */ fp = fopen(path, "wx");
 

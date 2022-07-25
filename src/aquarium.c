@@ -96,6 +96,7 @@
 #define DEFAULT_BASE_PATH "/etc/aquariums/"
 
 #define TEMPLATES_PATH "templates/"
+#define KERNELS_PATH   "kernels/"
 #define AQUARIUMS_PATH "aquariums/"
 
 #define ILLEGAL_TEMPLATE_PREFIX '.'
@@ -121,7 +122,9 @@
 
 // options
 
-static char* template = "amd64.aquabsd.dev";
+static char* template = "amd64.aquabsd.0622a";
+static char* kernel_template = NULL;
+
 static char* path = NULL;
 
 static bool persist = false;
@@ -129,6 +132,7 @@ static char* base_path = DEFAULT_BASE_PATH;
 static bool vnet_disable = false;
 
 static char* templates_path;
+static char* kernels_path;
 static char* aquariums_path;
 
 static char* sanctioned_templates;
@@ -137,8 +141,8 @@ static char* aquarium_db_path;
 static void __dead2 usage(void) {
 	fprintf(stderr,
 		"usage: %1$s [-r base]\n"
-		"       %1$s [-r base] -c path [-t template]\n"
-		"       %1$s [-r base] -o path [-t template]\n"
+		"       %1$s [-r base] -c path [-t template] [-k kernel_template]\n"
+		"       %1$s [-r base] -o path [-t template] [-k kernel_template]\n"
 		"       %1$s [-r base] [-p] [-v] -e path\n"
 		"       %1$s [-r base] -l\n"
 		"       %1$s [-r base] -s\n",
@@ -161,7 +165,9 @@ static inline char* __hash(char* str) { // djb2 algorithm
 }
 
 typedef enum {
-	OS_GENERIC, OS_FBSD, OS_LINUX
+	OS_GENERIC,
+	OS_FBSD,
+	OS_LINUX,
 } os_info_t;
 
 static inline os_info_t __retrieve_os_info(void) {
@@ -195,8 +201,8 @@ static inline os_info_t __retrieve_os_info(void) {
 	return OS_GENERIC;
 }
 
-static void load_linux_kmod(void) {
-	if (!kldload("linux64")) {
+static inline void __load_kmod(const char* name) {
+	if (!kldload(name)) {
 		return;
 	}
 
@@ -207,10 +213,18 @@ static void load_linux_kmod(void) {
 	// jammer, iets is fout gegaan
 
 	if (errno == ENOEXEC) {
-		errx(EXIT_FAILURE, "kldload(\"linux64\"): please check dmesg(8) for details (or don't, I'm not your mum)");
+		errx(EXIT_FAILURE, "kldload(\"%s\"): please check dmesg(8) for details (or don't, I'm not your mum)", name);
 	}
 
-	errx(EXIT_FAILURE, "kldload(\"linux64\"): %s", strerror(errno));
+	errx(EXIT_FAILURE, "kldload(\"%s\"): %s", name, strerror(errno));
+}
+
+static void load_linux64_kmod(void) {
+	__load_kmod("linux64");
+}
+
+static void load_vmm_kmod(void) {
+	__load_kmod("vmm");
 }
 
 typedef struct {
@@ -286,14 +300,14 @@ static int do_list(void) {
 	return EXIT_SUCCESS;
 }
 
-static int do_list_templates(void) {
-	DIR* dp = opendir(templates_path);
+static inline void __list_templates_dir(const char* path, const char* kind) {
+	DIR* dp = opendir(path);
 
 	if (!dp) {
-		errx(EXIT_FAILURE, "opendir: failed to open template directory %s: %s", templates_path, strerror(errno));
+		errx(EXIT_FAILURE, "opendir: failed to open template directory %s: %s", path, strerror(errno));
 	}
 
-	printf("ARCH\tOS\tVERS\n");
+	printf("ARCH\tOS\tVERS\t(%s)\n", kind);
 
 	struct dirent* ent;
 
@@ -324,23 +338,32 @@ static int do_list_templates(void) {
 	}
 
 	closedir(dp);
+}
+
+static int do_list_templates(void) {
+	__list_templates_dir(templates_path, "BASE");
+	__list_templates_dir(kernels_path, "KERNEL");
 
 	return EXIT_SUCCESS;
 }
 
 // creating aquariums (takes in a template name):
-//  - check if template exists
+//  - check if template exists (and also kernel template if specified)
 //  - open pointer file for writing
 //  - setuid root
-//  - extract template in some aquariums folder if it exists
-//  - if it doesn't, first download it, and compare hashed to a database of trusted templates to make sure there isn't anything weird going on
+//  - extract template (and kernel template if specified) in the aquarium's directory if it exists
+//  - if it doesn't (they don't), first download it (them), and compare SHA256 hash to a database of trusted templates (and kernel templates if specified) to make sure there isn't anything weird going on
 //  - create user and stuff
 //  - do any final setup (e.g. copying '/etc/resolv.conf' for networking)
 //  - write path of pointer file & its associated aquarium to aquarium database (and give it some unique ID)
 //  - setuid user (CHECK FOR ERRORS!)
 //  - write unique ID to pointer file
 
-static inline void __download_template(const char* template) {
+typedef enum {
+	TEMPLATE_KIND_BASE, TEMPLATE_KIND_KERNEL
+} template_kind_t;
+
+static inline void __download_template(const char* save_path, const char* template, template_kind_t wanted_template_kind) {
 	// read list of sanctioned templates, and see if we have a match
 
 	FILE* fp = fopen(sanctioned_templates, "r");
@@ -352,6 +375,7 @@ static inline void __download_template(const char* template) {
 	char buf[1024]; // I don't super like doing this, but it's unlikely we'll run into any problems
 	char* line;
 
+	template_kind_t template_kind;
 	char* name;
 	char* protocol;
 	char* url;
@@ -360,9 +384,10 @@ static inline void __download_template(const char* template) {
 
 	while ((line = fgets(buf, sizeof buf, fp))) { // fgets reads one less than 'size', so we're fine just padding 'sizeof buf'
 		enum {
-			NAME, PROTOCOL, URL, BYTES, SHA256, SENTINEL
+			TYPE, NAME, PROTOCOL, URL, BYTES, SHA256, SENTINEL
 		} kind = 0;
 
+		template_kind = 0;
 		name = NULL;
 		protocol = NULL;
 		url = NULL;
@@ -372,7 +397,25 @@ static inline void __download_template(const char* template) {
 		char* tok;
 
 		while ((tok = strsep(&line, ":"))) {
-			if (kind == NAME) {
+			if (kind == TYPE) {
+				if (*tok == 'b') {
+					template_kind = TEMPLATE_KIND_BASE;
+				}
+
+				else if (*tok == 'k') {
+					template_kind = TEMPLATE_KIND_KERNEL;
+				}
+
+				else {
+					errx(EXIT_FAILURE, "Unknown template kind ('%s')", tok);
+				}
+
+				if (template_kind != wanted_template_kind) {
+					goto next;
+				}
+			}
+
+			else if (kind == NAME) {
 				name = tok;
 
 				if (strcmp(name, template)) {
@@ -432,7 +475,7 @@ found:
 	printf("Found template, downloading from %s ...\n", composed_url);
 
 	char* path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
-	asprintf(&path, "%s%c%s.txz", templates_path, ILLEGAL_TEMPLATE_PREFIX, name);
+	asprintf(&path, "%s%c%s.txz", save_path, ILLEGAL_TEMPLATE_PREFIX, name);
 
 	/* FILE* */ fp = fopen(path, "w");
 
@@ -511,11 +554,84 @@ found:
 	// checks have succeeded; move temporary file to permanent position
 
 	char* final_path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
-	asprintf(&final_path, "%s%s.txz", templates_path, name);
+	asprintf(&final_path, "%s%s.txz", save_path, name);
 
 	if (rename(path, final_path) < 0) {
 		errx(EXIT_FAILURE, "rename: failed to rename %s to %s: %s", path, final_path, strerror(errno));
 	}
+}
+
+static inline void __extract_template(const char* aquarium_path, const char* name, template_kind_t kind) {
+	if (!name) {
+		return;
+	}
+
+	// where should we look for templates?
+
+	char* search_path = templates_path;
+
+	if (kind == TEMPLATE_KIND_KERNEL) {
+		search_path = kernels_path;
+	}
+
+	// build template path
+	// attempt to download it if it don't already exist
+
+	char* template_path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
+	asprintf(&template_path, "%s%s.txz", search_path, name);
+
+	if (access(template_path, R_OK) < 0) {
+		// file template doesn't yet exist; download & check it
+		__download_template(search_path, template, kind);
+	}
+
+	// make & change into final aquarium directory
+	// as per archive_write_disk(3)'s "BUGS" section, we mustn't call 'chdir' between opening and closing archive objects
+
+	if (chdir(aquarium_path) < 0) {
+		errx(EXIT_FAILURE, "chdir: %s", strerror(errno));
+	}
+
+	// open archive
+
+	struct archive* archive = archive_read_new();
+
+	archive_read_support_filter_all(archive);
+	archive_read_support_format_all(archive);
+
+	if (archive_read_open_filename(archive, template_path, ARCHIVE_CHUNK_BYTES) < 0) {
+		errx(EXIT_FAILURE, "archive_read_open_filename: failed to open %s template: %s", template_path, archive_error_string(archive));
+	}
+
+	// extract archive
+
+	while (1) {
+		struct archive_entry* entry;
+		int res = archive_read_next_header(archive, &entry);
+
+		if (res == ARCHIVE_OK) {
+			// TODO when multithreading, the 'ARCHIVE_EXTRACT_ACL' flag results in a bus error
+			//      it would seem as though there is a bug in 'libarchive', but unfortunately I have not yet had the time to resolve it
+
+			res = archive_read_extract(archive, entry, ARCHIVE_EXTRACT_TIME | ARCHIVE_EXTRACT_OWNER | ARCHIVE_EXTRACT_PERM | /*ARCHIVE_EXTRACT_ACL |*/ ARCHIVE_EXTRACT_XATTR | ARCHIVE_EXTRACT_FFLAGS);
+		}
+
+		if (res == ARCHIVE_EOF) {
+			break;
+		}
+
+		const char* error_string = archive_error_string(archive);
+		unsigned useless_warning = error_string && !strcmp(error_string, "Can't restore time");
+
+		if (res != ARCHIVE_OK && !(res == ARCHIVE_WARN && useless_warning)) {
+			errx(EXIT_FAILURE, "archive_read_next_header: %s", error_string);
+		}
+	}
+
+	// reached success
+
+	archive_read_close(archive);
+	archive_read_free(archive);
 }
 
 static int do_create(void) {
@@ -585,63 +701,10 @@ static int do_create(void) {
 		errx(EXIT_FAILURE, "setuid: %s", strerror(errno));
 	}
 
-	// build template path
+	// extract templates
 
-	char* template_path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
-	asprintf(&template_path, "%s%s.txz", templates_path, template);
-
-	if (access(template_path, R_OK) < 0) {
-		// file template doesn't yet exist; download & check it
-		__download_template(template);
-	}
-
-	// make & change into final aquarium directory
-	// as per archive_write_disk(3)'s "BUGS" section, we mustn't call 'chdir' between opening and closing archive objects
-
-	if (chdir(aquarium_path) < 0) {
-		errx(EXIT_FAILURE, "chdir: %s", strerror(errno));
-	}
-
-	// open archive
-
-	struct archive* archive = archive_read_new();
-
-	archive_read_support_filter_all(archive);
-	archive_read_support_format_all(archive);
-
-	if (archive_read_open_filename(archive, template_path, ARCHIVE_CHUNK_BYTES) < 0) {
-		errx(EXIT_FAILURE, "archive_read_open_filename: failed to open %s template: %s", template_path, archive_error_string(archive));
-	}
-
-	// extract archive
-
-	while (1) {
-		struct archive_entry* entry;
-		int res = archive_read_next_header(archive, &entry);
-
-		if (res == ARCHIVE_OK) {
-			// TODO when multithreading, the 'ARCHIVE_EXTRACT_ACL' flag results in a bus error
-			//      it would seem as though there is a bug in 'libarchive', but unfortunately I have not yet had the time to resolve it
-
-			res = archive_read_extract(archive, entry, ARCHIVE_EXTRACT_TIME | ARCHIVE_EXTRACT_OWNER | ARCHIVE_EXTRACT_PERM | /*ARCHIVE_EXTRACT_ACL |*/ ARCHIVE_EXTRACT_XATTR | ARCHIVE_EXTRACT_FFLAGS);
-		}
-
-		if (res == ARCHIVE_EOF) {
-			break;
-		}
-
-		const char* error_string = archive_error_string(archive);
-		unsigned useless_warning = error_string && !strcmp(error_string, "Can't restore time");
-
-		if (res != ARCHIVE_OK && !(res == ARCHIVE_WARN && useless_warning)) {
-			errx(EXIT_FAILURE, "archive_read_next_header: %s", error_string);
-		}
-	}
-
-	// reached success
-
-	archive_read_close(archive);
-	archive_read_free(archive);
+	__extract_template(aquarium_path, template, TEMPLATE_KIND_BASE);
+	__extract_template(aquarium_path, kernel_template, TEMPLATE_KIND_KERNEL);
 
 	// copy over /etc/resolv.conf for networking to, well, work
 
@@ -691,7 +754,7 @@ static int do_create(void) {
 		"echo 127.0.0.1 $hostname >> /etc/hosts;"
 
 	if (os == OS_LINUX) {
-		load_linux_kmod();
+		load_linux64_kmod();
 
 		setup_script_fmt = SETUP_SCRIPT_HEADER
 			// fix APT defaults
@@ -901,7 +964,7 @@ found:
 	os_info_t os = __retrieve_os_info();
 
 	if (os == OS_LINUX) {
-		load_linux_kmod();
+		load_linux64_kmod();
 
 		// mount /dev/shm as tmpfs
 		// on linux, this needs to have mode 1777
@@ -1421,7 +1484,7 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:e:lo:pr:st:v")) != -1) {
+	while ((c = getopt(argc, argv, "c:e:k:lo:pr:st:v")) != -1) {
 		// general options
 
 		if (c == 'p') {
@@ -1463,6 +1526,10 @@ int main(int argc, char* argv[]) {
 
 		// name-passing options
 
+		else if (c == 'k') {
+			kernel_template = optarg;
+		}
+
 		else if (c == 't') {
 			template = optarg;
 		}
@@ -1479,6 +1546,7 @@ int main(int argc, char* argv[]) {
 	// we don't really care about freeing these
 
 	asprintf(&templates_path,       "%s/" TEMPLATES_PATH,       base_path);
+	asprintf(&kernels_path,         "%s/" KERNELS_PATH,         base_path);
 	asprintf(&aquariums_path,       "%s/" AQUARIUMS_PATH,       base_path);
 
 	asprintf(&sanctioned_templates, "%s/" SANCTIONED_TEMPLATES, base_path);

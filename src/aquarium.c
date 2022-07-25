@@ -9,7 +9,7 @@
 //  - remove jails when sweeping (based on hash of aquarium path)
 
 // building:
-// $ cc aquarium.c -larchive -lfetch -lcrypto -lcopyfile -ljail -o aquarium
+// $ cc aquarium.c -larchive -lfetch -lcrypto -ljail /usr/lib/libcopyfile.a -o aquarium
 // $ chmod u+s aquarium && chown root:wheel aquarium
 
 // create group:

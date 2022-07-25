@@ -49,9 +49,6 @@
 // % $aquarium_path/opt/google/chrome/chrome --no-sandbox --enable-features=VaapiVideoDecoder
 // navigate to 'chrome://gpu' and verify that everything is working correctly
 
-#include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
-
 // includes
 
 #include <dirent.h>
@@ -857,19 +854,25 @@ found:
 		errx(EXIT_FAILURE, "open(\"dev\"): %s", strerror(errno));
 	}
 
-	devfs_rsnum ruleset = 1;
+	devfs_rsnum ruleset = 1; // devfsrules_hide_all
 
 	if (ioctl(devfs_fd, DEVFSIO_SAPPLY, &ruleset) < 0) {
 		errx(EXIT_FAILURE, "DEVFSIO_SAPPLY: %s", strerror(errno));
 	}
 
-	ruleset = 2;
+	ruleset = 2; // devfsrules_unhide_basic
 
 	if (ioctl(devfs_fd, DEVFSIO_SAPPLY, &ruleset) < 0) {
 		errx(EXIT_FAILURE, "DEVFSIO_SAPPLY: %s", strerror(errno));
 	}
 
-	ruleset = 3;
+	ruleset = 3; // devfsrules_unhide_login
+
+	if (ioctl(devfs_fd, DEVFSIO_SAPPLY, &ruleset) < 0) {
+		errx(EXIT_FAILURE, "DEVFSIO_SAPPLY: %s", strerror(errno));
+	}
+
+	ruleset = 5; // devfsrules_jail_vnet
 
 	if (ioctl(devfs_fd, DEVFSIO_SAPPLY, &ruleset) < 0) {
 		errx(EXIT_FAILURE, "DEVFSIO_SAPPLY: %s", strerror(errno));

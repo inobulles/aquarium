@@ -8,3 +8,4 @@ aquarium
 *.txz
 *.img
 my-aquarium
+.build

@@ -1,20 +1,23 @@
 #!/bin/sh
 set -e
 
+if [ $(id -u) != 0 ]; then
+	echo "This script must be run as root 🥕"
+	exit 1
+fi
+
+set -x
+
 mkdir -p bin
 
-# compile library
+# compile aquarium frontend
 
-cc -c src/libbob.c -Isrc -std=c99 -fPIC -o bin/libbob.o
+cc src/aquarium.c -g -larchive -lfetch -lcrypto -ljail /usr/lib/libcopyfile.a -o bin/aquarium
 
-# create static library
+# add setuid bit to executable
 
-ar rc bin/libbob.a bin/libbob.o
+chmod u+s bin/aquarium
 
-# index static library
+# root user owns it
 
-ranlib bin/libbob.a
-
-# create shared library
-
-cc -shared bin/libbob.o -o bin/libbob.so
+chown root:wheel bin/aquarium

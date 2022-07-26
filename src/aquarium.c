@@ -1232,9 +1232,10 @@ shell:
 	}
 
 	// unfortunately we kinda need to use execlp here
-	// different OS' may have different locations for the sh binary
+	// different OS' may have different locations for the 'env' binary
+	// we use it instead of starting the shell directly to clear any environment variables that we shouldn't have access to (and which anyway isn't super relevant to us)
 
-	return execlp("sh", "sh", NULL);
+	return execlp("env", "env", "-i", "sh", NULL);
 }
 
 // sweeping aquariums (takes in nothing):
@@ -1887,7 +1888,7 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:e:f:k:lo:pr:st:T:vy:")) != -1) {
+	while ((c = getopt(argc, argv, "c:e:fi:k:lo:pr:st:T:vy:")) != -1) {
 		// general options
 
 		if (c == 'p') {

@@ -122,6 +122,8 @@
 
 // options
 
+static gid_t stoners_gid = 0;
+
 static char* template = "amd64.aquabsd.0622a";
 static char* kernel_template = NULL;
 
@@ -143,6 +145,7 @@ static void __dead2 usage(void) {
 	fprintf(stderr,
 		"usage: %1$s [-r base]\n"
 		"       %1$s [-r base] -c path [-t template] [-k kernel_template]\n"
+		"       %1$s [-r base] -f\n"
 		"       %1$s [-r base] -T path [-o template]\n"
 		"       %1$s [-r base] -i path [-o image]\n"
 		"       %1$s [-r base] [-p] [-v] -e path\n"
@@ -280,6 +283,75 @@ static inline int __wait_for_process(pid_t pid) {
 }
 
 // actions
+
+static int do_struct(void) {
+	// build filestructure if it doesn't yet exist for convenience
+	// also create a sanctioned templates file with some default and trusted entries
+
+	uid_t uid = getuid();
+
+	if (setuid(0) < 0) {
+		errx(EXIT_FAILURE, "setuid(0), %s", strerror(errno));
+	}
+
+	mode_t mode = 0770; // read/write/execute for owner (root), read/write/execute for group (stoners, execute access is required to list directory)
+
+	#define SET_PERMS(path) \
+		if (stoners_gid && chown((path), 0, stoners_gid) < 0) { \
+			errx(EXIT_FAILURE, "chown(\"%s\", 0, %d): %s", (path), stoners_gid, strerror(errno)); \
+		} \
+		\
+		if (chmod((path), mode) < 0) { \
+			errx(EXIT_FAILURE, "chmod(\"%s\", 0, 0%o): %s", (path), mode, strerror(errno)); \
+		}
+
+	#define TRY_MKDIR(path) \
+		if (mkdir((path), mode) < 0 && errno != EEXIST) { \
+			errx(EXIT_FAILURE, "mkdir(\"%s\", 0%o): %s", (path), mode, strerror(errno)); \
+		} \
+		\
+		SET_PERMS((path))
+
+	TRY_MKDIR(base_path)
+
+	TRY_MKDIR(templates_path)
+	TRY_MKDIR(kernels_path)
+	TRY_MKDIR(aquariums_path)
+
+	if (access(sanctioned_templates, R_OK) < 0) {
+		FILE* fp = fopen(sanctioned_templates, "wx");
+
+		if (!fp) {
+			errx(EXIT_FAILURE, "fopen(\"%s\"): %s", sanctioned_templates, strerror(errno));
+		}
+
+		fprintf(fp, "b:amd64.ubuntu.focal:https:github.com/inobulles/bob-linux-images/releases/download/amd64.ubuntu.focal/amd64.ubuntu.focal.txz:123438644:e1236bcc6a755a0db1d0fa34d4f6a942a56a51778a52d344c3d8c9c4f3b13682\n");
+		fprintf(fp, "b:amd64.aquabsd.0622a:https:github.com/inobulles/aquabsd-core/releases/download/v0622a-beta/base.txz:100050160:60321fefa8d46642f82fb51f9a1f16c552768da3f2b65b41ffa5fbaf8ff621fe\n");
+		fprintf(fp, "k:amd64.aquabsd.0622a:https:github.com/inobulles/aquabsd-core/releases/download/v0622a-beta/kernel.txz:46796444:da71214c6c6ed3de41599c2cef56c5215ec0c547eb839a49669e78598839a000\n");
+
+		fclose(fp);
+	}
+
+	SET_PERMS(sanctioned_templates)
+
+	if (access(aquarium_db_path, R_OK) < 0) {
+		int fd = open(aquarium_db_path, O_CREAT, mode);
+
+		if (!fd) {
+			errx(EXIT_FAILURE, "open(\"%s\", O_CREAT, 0%o): %s", aquarium_db_path, mode, strerror(errno));
+		}
+
+		close(fd);
+	}
+
+	SET_PERMS(aquarium_db_path)
+
+	if (setuid(uid) < 0) {
+		errx(EXIT_FAILURE, "setuid(%d): %s", uid, strerror(errno));
+	}
+
+	return EXIT_SUCCESS;
+}
 
 static int do_list(void) {
 	FILE* fp = fopen(aquarium_db_path, "r");
@@ -717,7 +789,7 @@ static int do_create(void) {
 	uid_t uid = getuid();
 
 	if (setuid(0) < 0) {
-		errx(EXIT_FAILURE, "setuid: %s", strerror(errno));
+		errx(EXIT_FAILURE, "setuid(0): %s", strerror(errno));
 	}
 
 	// extract templates
@@ -832,7 +904,7 @@ static int do_create(void) {
 	// finish writing pointer file as user
 
 	if (setuid(uid) < 0) {
-		errx(EXIT_FAILURE, "setuid: %s", strerror(errno));
+		errx(EXIT_FAILURE, "setuid(%d): %s", uid, strerror(errno));
 	}
 
 	// change back to where we were and write to pointer file
@@ -935,7 +1007,7 @@ static int do_enter(void) {
 	uid_t uid = getuid();
 
 	if (setuid(0) < 0) {
-		errx(EXIT_FAILURE, "setuid: %s", strerror(errno));
+		errx(EXIT_FAILURE, "setuid(0): %s", strerror(errno));
 	}
 
 	// mount devfs filesystem
@@ -1498,7 +1570,7 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:e:i:k:lo:pr:st:T:v")) != -1) {
+	while ((c = getopt(argc, argv, "c:e:fi:k:lo:pr:st:T:v")) != -1) {
 		// general options
 
 		if (c == 'p') {
@@ -1523,6 +1595,10 @@ int main(int argc, char* argv[]) {
 		else if (c == 'e') {
 			action = do_enter;
 			path = optarg;
+		}
+
+		else if (c == 'f') {
+			action = do_struct;
 		}
 
 		else if (c == 'i') {
@@ -1576,6 +1652,7 @@ int main(int argc, char* argv[]) {
 	asprintf(&aquarium_db_path,     "%s/" AQUARIUM_DB_PATH,     base_path);
 
 	// skip this stuff if we're root
+	// note that aquariums created as root won't be accessible by members of the stoners group
 
 	uid_t uid = getuid();
 
@@ -1591,6 +1668,7 @@ int main(int argc, char* argv[]) {
 		errx(EXIT_FAILURE, "Couldn't find \"" STONERS_GROUP "\" group");
 	}
 
+	stoners_gid = stoners_group->gr_gid;
 	endgrent();
 
 	// make sure user is part of the $STONERS_GROUP group
@@ -1607,6 +1685,8 @@ int main(int argc, char* argv[]) {
 	errx(EXIT_FAILURE, "%s is not part of the \"" STONERS_GROUP "\" group", passwd->pw_name);
 
 okay:
+
+	// finally actually execute the action we were here for
 
 	return action();
 }

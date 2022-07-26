@@ -124,6 +124,9 @@
 
 static gid_t stoners_gid = 0;
 
+static char** copy_args = NULL;
+static size_t copy_args_len = 0;
+
 static char* template = "amd64.aquabsd.0622a";
 static char* kernel_template = NULL;
 
@@ -146,11 +149,12 @@ static void __dead2 usage(void) {
 		"usage: %1$s [-r base]\n"
 		"       %1$s [-r base] -c path [-t template] [-k kernel_template]\n"
 		"       %1$s [-r base] -f\n"
-		"       %1$s [-r base] -T path -o template\n"
 		"       %1$s [-r base] -i path -o image\n"
-		"       %1$s [-r base] [-p] [-v] -e path\n"
+		"       %1$s [-r base] [-pv] -e path\n"
 		"       %1$s [-r base] -l\n"
-		"       %1$s [-r base] -s\n",
+		"       %1$s [-r base] -s\n"
+		"       %1$s [-r base] -T path -o template\n"
+		"       %1$s [-r base] -y path source_file ... target_directory\n",
 	getprogname());
 
 	exit(EXIT_FAILURE);
@@ -1815,6 +1819,63 @@ static int do_img_out(void) {
 	return EXIT_SUCCESS;
 }
 
+// copy files from outside of the aquarium
+
+static int do_copy(void) {
+	if (!copy_args || copy_args_len < 2) {
+		usage();
+	}
+
+	char* aquarium_path = __read_pointer_file();
+
+	// setuid root
+
+	uid_t uid = getuid();
+
+	if (setuid(0) < 0) {
+		errx(EXIT_FAILURE, "setuid(0): %s", strerror(errno));
+	}
+
+	// iterate through all files
+
+	char* target = copy_args[--copy_args_len];
+
+	while (copy_args_len --> 0) {
+		char* source = copy_args[copy_args_len];
+
+		// load target
+
+		char* target_path;
+		asprintf(&target_path, "%s/%s/%s", aquarium_path, target, strrchr(source, '/'));
+
+		int target_fd = creat(target_path, 0660);
+		free(target_path);
+
+		if (target_fd < 0) {
+			errx(EXIT_FAILURE, "creat(\"%s\"): %s", target_path, strerror(errno));
+		}
+
+		// load source
+
+		int fd = open(source, O_RDONLY);
+
+		if (fd < 0) {
+			errx(EXIT_FAILURE, "open(\"%s\"): %s", source, strerror(errno));
+		}
+
+		// copy & close
+
+		if (fcopyfile(fd, target_fd, 0, COPYFILE_ALL) < 0) {
+			errx(EXIT_FAILURE, "fcopyfile(\"%s\", \"%s\"): %s", source, target_path, strerror(errno));
+		}
+
+		close(fd);
+		close(target_fd);
+	}
+
+	return EXIT_SUCCESS;
+}
+
 // main function
 
 typedef int (*action_t) (void);
@@ -1826,7 +1887,7 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:e:fi:k:lo:pr:st:T:v")) != -1) {
+	while ((c = getopt(argc, argv, "c:e:f:k:lo:pr:st:T:vy:")) != -1) {
 		// general options
 
 		if (c == 'p') {
@@ -1875,6 +1936,11 @@ int main(int argc, char* argv[]) {
 			path = optarg;
 		}
 
+		else if (c == 'y') {
+			action = do_copy;
+			path = optarg;
+		}
+
 		// name-passing options
 
 		else if (c == 'k') {
@@ -1896,6 +1962,15 @@ int main(int argc, char* argv[]) {
 
 	argc -= optind;
 	argv += optind;
+
+	if (action == do_copy) {
+		copy_args = argv;
+		copy_args_len = argc;
+	}
+
+	else if (argc) {
+		usage();
+	}
 
 	// generate various paths relative to the base path
 	// we don't really care about freeing these

@@ -6,3 +6,4 @@ rootfs/
 *.core
 aquarium
 *.txz
+*.img

@@ -1162,19 +1162,19 @@ static void __remove_aquarium(char* aquarium_path) {
 		errx(EXIT_FAILURE, "chdir: %s", strerror(errno));
 	}
 
-	// first, we make sure all possible mounted filesystems are unmounted (we do this all twice for a bit of encouragement)
-	// things may go wrong unmounting, but that's a problem we can delegate to the subsequent rm call
-	// similarly, the aquarium may have already been deleted (e.g. by a nosy user)
+	// first, we make sure all possible mounted filesystems are unmounted
+	// we do as many iterations as we need, because some filesystems may be mounted over others
+	// the aquarium may have already been deleted (e.g. by a nosy user)
 	// so we don't wanna do anything with the return value of '__wait_for_process'
 
-	for (int i = 0; i < 2; i++) {
-		unmount("dev",     MNT_FORCE);
-		unmount("dev/fd",  MNT_FORCE);
-		unmount("dev/shm", MNT_FORCE);
-		unmount("proc",    MNT_FORCE);
-		unmount("sys",     MNT_FORCE);
-		unmount("tmp",     MNT_FORCE);
-	}
+	do {
+		while (!unmount("dev/fd", MNT_FORCE));
+		while (!unmount("dev/shm", MNT_FORCE));
+	} while (!unmount("dev", MNT_FORCE));
+
+	while (!unmount("proc", MNT_FORCE));
+	while (!unmount("sys", MNT_FORCE));
+	while (!unmount("tmp", MNT_FORCE));
 
 	// then, we remove all the aquarium files
 	// TODO I desperately need some easy API for removing files in the standard library on aquaBSD

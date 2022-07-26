@@ -1711,8 +1711,6 @@ static int do_img_out(void) {
 		errx(EXIT_FAILURE, "mkdir(\"%s\", 0700): %s", stage_efi, strerror(errno));
 	}
 
-	free(stage_efi);
-
 	char* stage_efi_boot;
 	asprintf(&stage_efi_boot, "%s/BOOT", stage_efi);
 
@@ -1742,6 +1740,7 @@ static int do_img_out(void) {
 
 	free(bootx64_efi);
 	free(stage_efi_boot);
+	free(stage_efi);
 
 	if (fcopyfile(loader_fd, bootx64_fd, 0, COPYFILE_ALL) < 0) {
 		errx(EXIT_FAILURE, "fcopyfile(\"%s\", \"%s\"): %s", loader_efi, bootx64_efi, strerror(errno));

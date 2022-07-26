@@ -1,21 +1,21 @@
-compute_engine_instance:
-  platform: freebsd
-  image_project: freebsd-org-cloud-dev
-  image: freebsd-13-0-release-amd64
-  cpu: 1
-  memory: 4G
+freebsd_instance:
+  image_family: freebsd-14-0-snap
+  cpu: 2
+  memory: 8G
 
 task:
-  name: Build aquaBSD installer image
+  name: Build aquaBSD test images
   timeout_in: 30m
   setup_script:
   - uname -a
   - df -h
   - pkg --version
-  script:
-  - sh bob.sh
+  build_script:
+  - sh build.sh
+  test_script:
+  - sh test.sh
   post_script:
-  - ls -lah out/
+  - ls -lah .build/
   - df -h
   image_artifacts:
-    path: "out/aquabsd.img.xz"
+    path: ".build/*"

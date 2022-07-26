@@ -14,6 +14,7 @@ $prefix -c $pointer -t amd64.aquabsd.$version -k amd64.aquabsd.$version
 
 # TODO copy files in 'files' directory
 
+$prefix -y $pointer files/* /tmp
 $prefix -ve $pointer < custom.sh
 $prefix -i $pointer -o final.img
 

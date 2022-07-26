@@ -302,7 +302,7 @@ static int do_struct(void) {
 	uid_t uid = getuid();
 
 	if (setuid(0) < 0) {
-		errx(EXIT_FAILURE, "setuid(0), %s", strerror(errno));
+		errx(EXIT_FAILURE, "setuid(0): %s", strerror(errno));
 	}
 
 	mode_t mode = 0770; // read/write/execute for owner (root), read/write/execute for group (stoners, execute access is required to list directory)

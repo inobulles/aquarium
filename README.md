@@ -1,8 +1,13 @@
+⚠️⚠️⚠️ **I'M CURRENTLY WORKING ON THIS**
+
 # aquabsd-builder
 
 Say hello to Bob the builder 👷
 
-Bob the builder will help you create aquaBSD installer images.
+Bob the builder will help you create aquaBSD images.
+A C library is provided for you to create images programmatically, similar to a `Dockerfile` but more powerful (and less straightforward 😛).
+
+## Compilation
 
 ## Usage
 

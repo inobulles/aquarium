@@ -11,6 +11,8 @@ rootfs="rootfs"
 dist="dist"
 src="src"
 
+core_ver=$version
+
 # download missing components
 
 mkdir -p $dist

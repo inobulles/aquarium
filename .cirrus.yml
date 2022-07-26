@@ -13,7 +13,7 @@ task:
   setup_script:
   - export IGNORE_OSVERSION=yes
   - export SSL_NO_VERIFY_PEER=1
-  - fetch https://github.com/inobulles/aquabsd-pkg-repo/releases/download/v0222a-beta/libcopyfile-0222a.pkg -o libcopyfile.pkg
+  - fetch https://github.com/inobulles/aquabsd-pkg-repo/releases/download/v0722a-beta/libcopyfile-0722a.pkg -o libcopyfile.pkg
   - ABI="FreeBSD:13:amd64" pkg add -M libcopyfile.pkg
   build_script:
   - sh build.sh

@@ -41,7 +41,7 @@ pkg install pango librsvg2-rust icu
 
 # install necessary packages for the aquaBSD installer
 
-short_version="0222a"
+short_version="0722a"
 version="v$short_version-beta"
 repo_url="https://github.com/inobulles/aquabsd-pkg-repo/releases/download/$version"
 

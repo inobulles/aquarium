@@ -35,7 +35,7 @@ tar -xf $dist/kernel.txz -C $rootfs
 echo "[BOB] Extracting base ..."
 tar -xf $dist/base.txz -C $rootfs
 
-# set up all the other stuff we need to create a functionnal installer image
+# set up all the other stuff we need to create a functional installer image
 
 echo "[BOB] Setting up ..."
 

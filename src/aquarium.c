@@ -745,23 +745,20 @@ static int do_create(void) {
 
 	// TODO haven't yet thought about how safe this'd be, but since the aquarium database also contains what the pointer file was supposed to point to, maybe it could be cool for this to automatically regenerate the pointer file instead of erroring?
 
-	bool no_exist = access(path, F_OK) < 0;
-	int fd;
+	if (!access(path, F_OK)) {
+		errx(EXIT_FAILURE, "Pointer file %s already exists", path);
+	}
 
-	if (no_exist) {
-		fd = open(path, O_CREAT, 0 /* don't care about mode */);
+	int fd = open(path, O_CREAT, 0 /* don't care about mode */);
 
-		if (!fd) {
-			errx(EXIT_FAILURE, "open(\"%s\"): %s", path, strerror(errno));
-		}
+	if (!fd) {
+		errx(EXIT_FAILURE, "open(\"%s\"): %s", path, strerror(errno));
 	}
 
 	char* abs_path = realpath(path, NULL);
 
-	if (no_exist) {
-		close(fd);
-		remove(path);
-	}
+	close(fd);
+	remove(path);
 
 	if (!abs_path) {
 		errx(EXIT_FAILURE, "realpath(\"%s\"): %s", path, strerror(errno));

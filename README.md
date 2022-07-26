@@ -23,8 +23,8 @@ This will generate the `aquarium` frontend in `bin/aquarium`.
 Bob the builder always enjoys giving a hand!
 Don't be afraid to ask him to run a few tests:
 
-```shell
-sh tests.sh
+```console
+sh test.sh
 ```
 
 He'll then go through all of the `img` directories and build all bootable image artifacts, which he'll then place in `.build`.

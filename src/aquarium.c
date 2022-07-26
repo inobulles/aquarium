@@ -146,8 +146,8 @@ static void __dead2 usage(void) {
 		"usage: %1$s [-r base]\n"
 		"       %1$s [-r base] -c path [-t template] [-k kernel_template]\n"
 		"       %1$s [-r base] -f\n"
-		"       %1$s [-r base] -T path [-o template]\n"
-		"       %1$s [-r base] -i path [-o image]\n"
+		"       %1$s [-r base] -T path -o template\n"
+		"       %1$s [-r base] -i path -o image\n"
 		"       %1$s [-r base] [-p] [-v] -e path\n"
 		"       %1$s [-r base] -l\n"
 		"       %1$s [-r base] -s\n",
@@ -175,11 +175,22 @@ typedef enum {
 	OS_LINUX,
 } os_info_t;
 
-static inline os_info_t __retrieve_os_info(void) {
-	// this method of retrieving OS info relies on the existence of an /etc/os-release file on the installation
+static inline os_info_t __retrieve_os_info(const char* aquarium_path) {
+	// this method of retrieving OS info relies on the existence of an '/etc/os-release' file on the installation
 	// all officially supported OS' for aquariums should have this file, else they'll simply be reported as 'OS_GENERIC'
+	// if 'aquarium_path == NULL', assume we're already in the aquarium, and just use the relative path for '/etc/os-release'
 
-	FILE* fp = fopen("etc/os-release", "r");
+	char* path = "etc/os-release";
+
+	if (aquarium_path) {
+		asprintf(&path, "%s/etc/os-release", aquarium_path);
+	}
+
+	FILE* fp = fopen(path, "r");
+
+	if (aquarium_path) {
+		free(path);
+	}
 
 	if (!fp) {
 		return OS_GENERIC;
@@ -829,7 +840,7 @@ static int do_create(void) {
 	struct passwd* passwd = getpwuid(uid);
 	char* username = passwd->pw_name;
 
-	os_info_t os = __retrieve_os_info();
+	os_info_t os = __retrieve_os_info(NULL);
 	char* setup_script_fmt;
 
 	#define SETUP_SCRIPT_HEADER \
@@ -1071,7 +1082,7 @@ static int do_enter(void) {
 	// OS-specific actions
 	// treat OS_GENERIC OS' as the default (i.e. like their host OS)
 
-	os_info_t os = __retrieve_os_info();
+	os_info_t os = __retrieve_os_info(NULL);
 
 	if (os == OS_LINUX) {
 		load_linux64_kmod();
@@ -1226,26 +1237,49 @@ shell:
 //  - if a valid pointer file doesn't exist at the path in the database, we say the aquarium has been "orphaned"
 //  - if an aquarium is orphaned, we can safely delete it and remove it from the aquarium database
 
-static void __remove_aquarium(char* aquarium_path) {
-	if (chdir(aquarium_path) < 0) {
-		errx(EXIT_FAILURE, "chdir: %s", strerror(errno));
-	}
+static void __unmount_aquarium(char* aquarium_path) {
+	#define GEN(prefix, name) \
+		char* name; \
+		asprintf(&name, "%s/" #name, prefix);
 
-	// first, we make sure all possible mounted filesystems are unmounted
+	GEN(aquarium_path, dev)
+	GEN(dev, fd)
+	GEN(dev, shm)
+
+	GEN(aquarium_path, proc)
+	GEN(aquarium_path, sys)
+	GEN(aquarium_path, tmp)
+
 	// we do as many iterations as we need, because some filesystems may be mounted over others
-	// the aquarium may have already been deleted (e.g. by a nosy user)
-	// so we don't wanna do anything with the return value of '__wait_for_process'
 
 	do {
-		while (!unmount("dev/fd", MNT_FORCE));
-		while (!unmount("dev/shm", MNT_FORCE));
-	} while (!unmount("dev", MNT_FORCE));
+		while (!unmount(fd, MNT_FORCE));
+		while (!unmount(shm, MNT_FORCE));
+	} while (!unmount(dev, MNT_FORCE));
 
-	while (!unmount("proc", MNT_FORCE));
-	while (!unmount("sys", MNT_FORCE));
-	while (!unmount("tmp", MNT_FORCE));
+	while (!unmount(proc, MNT_FORCE));
+	while (!unmount(sys, MNT_FORCE));
+	while (!unmount(tmp, MNT_FORCE));
+
+	#undef GEN
+
+	free(dev);
+	free(fd);
+	free(shm);
+
+	free(proc);
+	free(sys);
+	free(tmp);
+}
+
+static void __remove_aquarium(char* aquarium_path) {
+	// first, make sure all possible mounted filesystems are unmounted
+
+	__unmount_aquarium(aquarium_path);
 
 	// then, we remove all the aquarium files
+	// the aquarium may have already been deleted (e.g. by a nosy user)
+	// so we don't wanna do anything with the return value of '__wait_for_process'
 	// TODO I desperately need some easy API for removing files in the standard library on aquaBSD
 	//      I'm not (I hope) dumb enough to do something like 'asprint(&cmd, "rm -rf %s", ent.aquarium_path)', but I know damn well other developers would be tempted to do such a thing given no other alternative
 
@@ -1425,6 +1459,10 @@ static int do_out_close_cb(struct archive* archive, void* _state) {
 }
 
 static int do_out(void) {
+	if (out_path) {
+		usage();
+	}
+
 	char* aquarium_path = __read_pointer_file();
 
 	// create template
@@ -1528,24 +1566,81 @@ static int do_out(void) {
 }
 
 // outputting aquariums as images
-//  - make sure '/etc/fstab' is setup correctly to mount the root filesystem & ESP (EFI System Partition)
-//  - create UFS2 filesystem image with the contents of the aquarium
-//  - create ESP filesystem image (FAT12) with the EFI loader
+//  - check the OS we're tryna create an image of is actually supported (i.e. is FreeBSD)
+//  - make sure '/etc/fstab' is setup correctly to mount the rootfs & ESP (EFI System Partition)
+//  - set default entropy
+//  - create UFS2 rootfs image with the contents of the aquarium
+//  - create ESP image (FAT12 - UEFI code seems to be fussy with FAT32 partitions generated by FreeBSD) with the EFI loader
 //  - combine all that together into a final image, which uses the GPT partition scheme (and also installs gptboot(8) in the MBR boot sector for BIOS booting on legacy systems - something aquabsd-installer should be doing too!)
+// TODO a lot of these things need to be added to aquabsd-installer
 
 static int do_img_out(void) {
+	if (out_path) {
+		usage();
+	}
+
 	char* aquarium_path = __read_pointer_file();
 
-	const char* rootfs_label = "aquabsd-rootfs"; // TODO this should be an option
+	// labels
+	// TODO these should be options
+
+	const char* rootfs_label = "aquabsd-rootfs";
 	const char* esp_label = "aquabsd-esp";
 
 	const char* esp_oem = "AQUABSD "; // must be 8 chars
 	const char* esp_vol_label = "AQUABSD-ESP";
 
-	// % echo "/dev/gpt/$rootfs_label / ufs ro,noatime 1 1" > $aquarium_path/etc/fstab
-	// % echo "/dev/gpt/$esp_label /boot/efi msdosfs ro,noatime 0 0" >> $aquarium_path/etc/fstab
+	// check the OS is actually supported
 
-	// % makefs -ZB little -o label=$label -o version=2 $rootfs_label.img $aquarium_path
+	os_info_t os = __retrieve_os_info(aquarium_path);
+
+	if (os != OS_FBSD) {
+		errx(EXIT_FAILURE, "Aquarium OS is unsupported (%d, only FreeBSD aquariums are currently supported)", os);
+	}
+
+	// make sure all filesystems are unmounted
+
+	__unmount_aquarium(aquarium_path);
+
+	// add necessary entries to fstab
+
+	char* path;
+	asprintf(&path, "%s/etc/fstab", aquarium_path);
+
+	FILE* fp = fopen(path, "w");
+	free(path);
+
+	if (!fp) {
+		errx(EXIT_FAILURE, "fopen(\"%s\"): %s", path, strerror(errno));
+	}
+
+	fprintf(fp, "/dev/gpt/%s / ufs ro,noatime 1 1\n", rootfs_label);
+	fprintf(fp, "/dev/gpt/%s /boot/efi msdosfs ro,noatime 0 0\n", esp_label);
+
+	fclose(fp);
+
+	// create UFS2 rootfs image with the contents of the aquarium
+	// we first need to make sure everything is properly unmounted though
+	// % makefs -ZBle -o label=$rootfs_label -o version=2 $rootfs_label.img $aquarium_path
+
+	pid_t pid = fork();
+
+	if (!pid) {
+		// child process
+		// don't care about freeing anything in here
+
+		char* label;
+		asprintf(&label, "label=%s", rootfs_label);
+
+		execl("/usr/sbin/makefs", "/usr/sbin/makefs", "-ZBle", "-o", label, "-oversion=2", "rootfs.img", aquarium_path, NULL);
+		_exit(EXIT_FAILURE);
+	}
+
+	int child_rv = __wait_for_process(pid);
+
+	if (child_rv < 0) {
+		errx(EXIT_FAILURE, "Child rootfs image creation process exited with error code %d", child_rv);
+	}
 
 	// see aquabsd-installer on how to stage the ESP partition (with 'EFI/BOOT/BOOTX64.EFI', gotten from '$aquarium_path/boot/loader.efi')
 	// TODO nonsensical error when omitting size option from makefs (the whole tool is kinda a mess tbh)

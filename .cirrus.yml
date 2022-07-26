@@ -23,4 +23,4 @@ task:
   - ls -lah .build/
   - df -h
   image_artifacts:
-    path: ".build/*"
+    path: ".build/*.img.xz"

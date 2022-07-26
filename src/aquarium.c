@@ -613,6 +613,7 @@ found:
 	SHA256_Final(hash, &sha_context);
 
 	char hash_hex[SHA256_DIGEST_LENGTH * 2 + 1] = { 0 }; // each byte in the hash can be represented with two hex digits
+	                                                     // TODO well shouldn't this be 'SHA256_DIGEST_LENGTH / 2 + 1' then?
 
 	for (size_t i = 0; i < sizeof hash; i++) {
 		snprintf(hash_hex, sizeof hash_hex, "%s%02x", hash_hex, hash[i]);
@@ -1459,7 +1460,7 @@ static int do_out_close_cb(struct archive* archive, void* _state) {
 }
 
 static int do_out(void) {
-	if (out_path) {
+	if (!out_path) {
 		usage();
 	}
 
@@ -1575,7 +1576,7 @@ static int do_out(void) {
 // TODO a lot of these things need to be added to aquabsd-installer
 
 static int do_img_out(void) {
-	if (out_path) {
+	if (!out_path) {
 		usage();
 	}
 
@@ -1632,7 +1633,12 @@ static int do_img_out(void) {
 		char* label_opt;
 		asprintf(&label_opt, "-olabel=%s", rootfs_label);
 
-		execl("/usr/sbin/makefs", "/usr/sbin/makefs", "-ZBle", label_opt, "-oversion=2", "rootfs.img", aquarium_path, NULL);
+		execl(
+			"/usr/sbin/makefs", "/usr/sbin/makefs", // 'makefs' binary location
+			"-ZBle", label_opt, "-oversion=2",      // filesystem options
+			"rootfs.img", aquarium_path,            // output/input paths
+			NULL);
+
 		_exit(EXIT_FAILURE);
 	}
 
@@ -1717,7 +1723,13 @@ static int do_img_out(void) {
 		char* label_opt;
 		asprintf(&label_opt, "-ovolume_label=%s", esp_vol_label);
 
-		execl("/usr/sbin/makefs", "/usr/sbin/makefs", "-tmsdos", "-ofat_type=12", "-osectors_per_cluster=1", oem_string_opt, label_opt, "-s1m", "esp.img", stage, NULL);
+		execl(
+			"/usr/sbin/makefs", "/usr/sbin/makefs",                // 'makefs' binary location
+			"-tmsdos", "-ofat_type=12", "-osectors_per_cluster=1", // filesystem options
+			"-s1m", oem_string_opt, label_opt,                     // more filesystem options
+			"esp.img", stage,                                      // output/input paths
+			NULL);
+
 		_exit(EXIT_FAILURE);
 	}
 
@@ -1731,7 +1743,42 @@ static int do_img_out(void) {
 
 	// % mkimg -s gpt -f raw -b $aquarium_path/boot/pmbr -p freebsd-boot/bootfs:=$aquarium_path/boot/gptboot -p efi/$esp_label:=$esp_label.img -p freebsd-ufs/$rootfs_label:=$rootfs_label.img -o $out_path
 
-	return EXIT_FAILURE;
+	/* pid_t */ pid = fork();
+
+	if (!pid) {
+		// child process
+		// don't care about freeing anything in here
+
+		char* pmbr;
+		asprintf(&pmbr, "-b%s/boot/pmbr", aquarium_path);
+
+		char* gptboot;
+		asprintf(&gptboot, "-pfreebsd-boot/bootfs:=%s/boot/gptboot", aquarium_path);
+
+		char* esp;
+		asprintf(&esp, "-pefi/%s:=esp.img", esp_label);
+
+		char* ufs;
+		asprintf(&ufs, "-pfreebsd-ufs/%s:=rootfs.img", rootfs_label);
+
+		execl(
+			"/usr/bin/mkimg", "/usr/bin/mkimg", // 'mkimg' binary location
+			"-sgpt", "-fraw",                   // partition table & image type options
+			pmbr,                               // MBR bootcode (for legacy BIOS booting yeah)
+			gptboot, esp, ufs,                  // different partitions
+			"-o", out_path,                     // output path
+			NULL);
+
+		_exit(EXIT_FAILURE);
+	}
+
+	/* int */ child_rv = __wait_for_process(pid);
+
+	if (child_rv < 0) {
+		errx(EXIT_FAILURE, "Child final image creation process exited with error code %d", child_rv);
+	}
+
+	return EXIT_SUCCESS;
 }
 
 // main function

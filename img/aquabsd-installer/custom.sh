@@ -58,7 +58,7 @@ fetch $repo_url/libmkfs_msdos-$short_version.pkg -o $pkg_out
 
 for package in $(find $pkg_out -type f); do
 	# our packages are built under 'FreeBSD:13:amd64', so prevent 'pkg' from complaining about that
-	ABI="FreeBSD:13:amd64" pkg add -M $package
+	ABI="FreeBSD:14:amd64" pkg add -M $package
 done
 
 # install aqua root

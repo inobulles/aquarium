@@ -2,7 +2,6 @@
 //  - factor out a libaquarium library from the aquarium frontend
 //  - manual page
 //  - tests
-//  - option for listing aquarium database
 //  - better way of copying over linux-nvidia-libs (probably best to build the package in a way which assumes it's installing to a Linux install right off the bat, and then have some kind of aquarium mechanism to install packages like 'aquarium -p my-aquarium linux-nvidia-libs-510.39.01.pkg' or something)
 //  - better solution than the 'compat.linux.emul_path' sysctl from FreeBSD, because that's super limited
 //  - may be interesting to replace instances of fgets with fparseln
@@ -617,7 +616,6 @@ found:
 	SHA256_Final(hash, &sha_context);
 
 	char hash_hex[SHA256_DIGEST_LENGTH * 2 + 1] = { 0 }; // each byte in the hash can be represented with two hex digits
-	                                                     // TODO well shouldn't this be 'SHA256_DIGEST_LENGTH / 2 + 1' then?
 
 	for (size_t i = 0; i < sizeof hash; i++) {
 		snprintf(hash_hex, sizeof hash_hex, "%s%02x", hash_hex, hash[i]);

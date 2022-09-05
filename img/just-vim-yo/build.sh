@@ -1,24 +1,24 @@
 #!/bin/sh
 set -xe
 
-prefix="../../bin/aquarium -r /tmp/aquariums"
+aquarium="../../bin/aquarium -r /tmp/aquariums"
 version="0922a"
 pointer="aquarium"
 pkg_repo="/usr/local/etc/pkg/repos/FreeBSD.conf"
 
-$prefix -f
+$aquarium -f
 
 rm -f $pointer
-$prefix -s
+$aquarium -s
 
-$prefix -c $pointer -t amd64.aquabsd.$version -k amd64.aquabsd.$version
+$aquarium -c $pointer -t amd64.aquabsd.$version -k amd64.aquabsd.$version
 
 if [ -f $pkg_repo ]; then
-	$prefix -y $pointer $pkg_repo /tmp
+	$aquarium -y $pointer $pkg_repo /tmp
 fi
 
-$prefix -ve $pointer < custom.sh
-$prefix -i $pointer -o final.img
+$aquarium -ve $pointer < custom.sh
+$aquarium -i $pointer -o final.img
 
 rm $pointer
-$prefix -s
+$aquarium -s

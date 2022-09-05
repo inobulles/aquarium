@@ -1259,13 +1259,13 @@ static void __unmount_aquarium(char* aquarium_path) {
 	// we do as many iterations as we need, because some filesystems may be mounted over others
 
 	do {
-		while (!unmount(fd, MNT_FORCE));
+		while (!unmount(fd,  MNT_FORCE));
 		while (!unmount(shm, MNT_FORCE));
-	} while (!unmount(dev, MNT_FORCE));
+	}   while (!unmount(dev, MNT_FORCE));
 
 	while (!unmount(proc, MNT_FORCE));
-	while (!unmount(sys, MNT_FORCE));
-	while (!unmount(tmp, MNT_FORCE));
+	while (!unmount(sys,  MNT_FORCE));
+	while (!unmount(tmp,  MNT_FORCE));
 
 	#undef GEN
 
@@ -1470,6 +1470,7 @@ static int do_out(void) {
 	}
 
 	char* aquarium_path = __read_pointer_file();
+	__unmount_aquarium(aquarium_path);
 
 	// create template
 
@@ -1586,6 +1587,7 @@ static int do_img_out(void) {
 	}
 
 	char* aquarium_path = __read_pointer_file();
+	__unmount_aquarium(aquarium_path);
 
 	// labels
 	// TODO these should be options

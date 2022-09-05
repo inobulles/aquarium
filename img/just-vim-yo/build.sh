@@ -2,7 +2,7 @@
 set -xe
 
 prefix="../../bin/aquarium -r /tmp/aquariums"
-version="0622a"
+version="0922a"
 pointer="aquarium"
 pkg_repo="/usr/local/etc/pkg/repos/FreeBSD.conf"
 

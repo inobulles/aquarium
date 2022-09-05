@@ -19,18 +19,18 @@ fi
 
 cp rc.local /etc
 
-echo "hostname=aquabsd-installer" > /etc/rc.conf
-echo "sendmail_enable=\"NONE\"" >> /etc/rc.conf
-echo "hostid_enable=\"NO\"" >> /etc/rc.conf
-echo "kld_list=\"vesa\"" >> /etc/rc.conf # as of commit b8cf1c5, the vesa kernel module isn't statically linked to the kernel in the default configuration ('sys/amd64/conf/GENERIC')
-echo "debug.witness.trace=0" >> /etc/sysctl.conf
+echo hostname=aquabsd-installer > /etc/rc.conf
+echo sendmail_enable=\"NONE\" >> /etc/rc.conf
+echo hostid_enable=\"NO\" >> /etc/rc.conf
+echo kld_list=\"vesa\" >> /etc/rc.conf # as of commit b8cf1c5, the vesa kernel module isn't statically linked to the kernel in the default configuration ('sys/amd64/conf/GENERIC')
+echo debug.witness.trace=0 >> /etc/sysctl.conf
 
 # set up bootloader
 
-echo "vfs.mountroot.timeout=\"10\"" >> /boot/loader.conf
-echo "kernels_autodetect=\"NO\"" >> /boot/loader.conf
-echo "kern.vty=vt" >> /boot/loader.conf
-echo "autoboot_delay=\"0\"" >> /boot/loader.conf
+echo vfs.mountroot.timeout=\"10\" >> /boot/loader.conf
+echo kernels_autodetect=\"NO\" >> /boot/loader.conf
+echo kern.vty=vt >> /boot/loader.conf
+echo autoboot_delay=\"0\" >> /boot/loader.conf
 
 # install external dependencies for the aquaBSD installer
 

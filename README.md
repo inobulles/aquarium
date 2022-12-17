@@ -1,11 +1,9 @@
-# aquabsd-builder
+# aquarium
 
-Say hello to Bob the builder 👷
-Bob the builder will help you create aquaBSD images.
+Repository for the source code of the `aquarium` frontend.
+Aquariums allow you to create virtual environments from automatically-downloaded templates, interact with & mutate them, and then finally create new templates or complete bootable (UEFI+BIOS) images out of them.
 
-This help is presented through the `aquarium` frontend, which allow you to create virtual environments from templates (which are downloaded remotely and checked by size & SHA256 hash), interact with said virtual environments, and then finally either create more templates or bootable (UEFI+BIOS) images out of them.
-
-There are usage examples in the `img` directory.
+Usage examples may be found in the `img` directory.
 This directory serves to automate building images, such as the aquaBSD installer image.
 
 ## Compilation
@@ -20,14 +18,11 @@ This will generate the `aquarium` frontend in `bin/aquarium`.
 
 ## Testing
 
-Bob the builder always enjoys giving a hand!
-Don't be afraid to ask him to run a few tests:
+As user, run:
 
 ```console
 sh test.sh
 ```
 
-He'll then go through all of the `img` directories and build all bootable image artifacts, which he'll then place in `.build`.
+This will go through all of the `img` directories and build all bootable image artifacts, which will then be placed in `.build`.
 This is what the CI setup does.
-
-[https://www.youtube.com/watch?v=0ldh_Cw6W0c](https://www.youtube.com/watch?v=0ldh_Cw6W0c)

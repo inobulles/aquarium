@@ -9,3 +9,4 @@ aquarium
 *.img
 my-aquarium
 .build
+*.sw[nop]

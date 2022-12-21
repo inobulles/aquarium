@@ -1,8 +1,8 @@
 // install dependencies
-// TODO these don't actually exist at the moment
+// TODO libmkfs_msdos doesn't actually exist at the moment
 
-// Deps.git("https://github.com/inobulles/libcopyfile")
-// Deps.git("https://github.com/inobulles/libmkfs_msdos")
+Deps.git_inherit("https://github.com/inobulles/libcopyfile")
+// Deps.git_inherit("https://github.com/inobulles/libmkfs_msdos")
 
 // C compilation
 
@@ -44,11 +44,11 @@ var install = {
 class Tests {
 	// e2e tests
 
-	static img_aquabsd_installer { // try and compile an aquaBSD installer image
+	static img_aquabsd_installer { // try to compile an aquaBSD installer image
 		return File.exec("sh", ["build.sh"])
 	}
 
-	static img_just_vim_yo { // try and compile an aquaBSD image with just vim installed
+	static img_just_vim_yo { // try to compile an aquaBSD image with just vim installed
 		return File.exec("sh", ["build.sh"])
 	}
 }

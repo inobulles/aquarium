@@ -10,6 +10,7 @@ var cc = CC.new()
 
 cc.add_opt("-std=c99")
 cc.add_opt("-isystem=/usr/local/include")
+cc.add_opt("-L/usr/local/lib")
 cc.add_opt("-Wall")
 cc.add_opt("-Wextra")
 

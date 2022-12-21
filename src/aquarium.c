@@ -242,10 +242,6 @@ static void load_linux64_kmod(void) {
 	__load_kmod("linux64");
 }
 
-static void load_vmm_kmod(void) {
-	__load_kmod("vmm");
-}
-
 typedef struct {
 	char* pointer_path;
 	char* aquarium_path;
@@ -302,7 +298,7 @@ static int do_struct(void) {
 	// build filestructure if it doesn't yet exist for convenience
 	// also create a sanctioned templates file with some default and trusted entries
 
-	uid_t uid = getuid();
+	uid_t const uid = getuid();
 
 	if (setuid(0) < 0) {
 		errx(EXIT_FAILURE, "setuid(0): %s", strerror(errno));
@@ -1017,8 +1013,6 @@ static int do_enter(void) {
 
 	// setuid root
 
-	uid_t uid = getuid();
-
 	if (setuid(0) < 0) {
 		errx(EXIT_FAILURE, "setuid(0): %s", strerror(errno));
 	}
@@ -1436,7 +1430,7 @@ typedef struct {
 	int fd;
 } do_out_state_t;
 
-static int do_out_open_cb(struct archive* archive, void* _state) {
+static int do_out_open_cb(__attribute__((unused)) struct archive* archive, void* _state) {
 	do_out_state_t* state = _state;
 
 	state->fd = open(state->out, O_WRONLY | O_CREAT, 0644);
@@ -1449,12 +1443,12 @@ static int do_out_open_cb(struct archive* archive, void* _state) {
 	return ARCHIVE_OK;
 }
 
-static la_ssize_t do_out_write_cb(struct archive* archive, void* _state, const void* buf, size_t len) {
+static la_ssize_t do_out_write_cb(__attribute__((unused)) struct archive* archive, void* _state, const void* buf, size_t len) {
 	do_out_state_t* state = _state;
 	return write(state->fd, buf, len);
 }
 
-static int do_out_close_cb(struct archive* archive, void* _state) {
+static int do_out_close_cb(__attribute__((unused)) struct archive* archive, void* _state) {
 	do_out_state_t* state = _state;
 
 	if (state->fd >= 0) {
@@ -1831,8 +1825,6 @@ static int do_copy(void) {
 	char* aquarium_path = __read_pointer_file();
 
 	// setuid root
-
-	uid_t uid = getuid();
 
 	if (setuid(0) < 0) {
 		errx(EXIT_FAILURE, "setuid(0): %s", strerror(errno));

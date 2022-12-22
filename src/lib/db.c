@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
-bool aquarium_next_db_ent(aquarium_opts_t* opts, aquarium_db_ent_t* ent, size_t buf_len, char buf[buf_len], FILE* fp, bool be_dramatic) {
+bool aquarium_db_next_ent(aquarium_opts_t* opts, aquarium_db_ent_t* ent, size_t buf_len, char buf[buf_len], FILE* fp, bool be_dramatic) {
 	char* line = fgets(buf, buf_len, fp);
 
 	if (!line) {

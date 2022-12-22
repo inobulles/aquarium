@@ -172,17 +172,32 @@ int create_aquarium(char const* path, char const* template, aquarium_opts_t* opt
 	char buf[1024];
 	aquarium_db_ent_t ent;
 
-	while (aquarium_next_db_ent(opts, &ent, sizeof buf, buf, fp, true)) {
+	while (aquarium_db_next_ent(opts, &ent, sizeof buf, buf, fp, true)) {
 		if (!strcmp(ent.pointer_path, abs_path)) {
 			warnx("Pointer file already exists in the aquarium database at %s (pointer file is supposed to reside at %s and point to %s)", opts->db_path, ent.pointer_path, ent.aquarium_path);
 			goto pointer_file_exists_db_err;
 		}
 	}
 
+	// setuid root
+
+	uid_t const uid = getuid();
+
+	if (setuid(0) < 0) {
+		warnx("setuid(0): %s", strerror(errno));
+		goto setuid_root_err;
+	}
+
 	// success
 
 	rv = 0;
 
+	if (setuid(uid) < 0) {
+		warnx("setuid(%d): %s", uid, strerror(errno));
+		rv = -1;
+	}
+
+setuid_root_err:
 pointer_file_exists_db_err:
 
 	fclose(fp);

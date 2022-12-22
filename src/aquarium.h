@@ -48,6 +48,6 @@ typedef struct {
 aquarium_opts_t* aquarium_opts_create(void);
 void aquarium_opts_free(aquarium_opts_t* opts);
 
-bool aquarium_next_db_ent(aquarium_opts_t* opts, aquarium_db_ent_t* ent, size_t buf_len, char buf[buf_len], FILE* fp, bool be_dramatic);
+bool aquarium_db_next_ent(aquarium_opts_t* opts, aquarium_db_ent_t* ent, size_t buf_len, char buf[buf_len], FILE* fp, bool be_dramatic);
 
 int create_aquarium(char const* path, char const* template, aquarium_opts_t* opts);

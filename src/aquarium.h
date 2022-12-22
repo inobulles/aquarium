@@ -2,15 +2,13 @@
 
 // TODO proper error handling with a nice traceback would be nice
 
-// defines
- 
 #include <stdbool.h>
 #include <stdio.h>
 #include <sys/types.h>
 
-#define AQUARIUM_PROGRESS_FREQUENCY  (1 << 22)
-#define AQUARIUM_FETCH_CHUNK_BYTES   (1 << 16)
-#define AQUARIUM_ARCHIVE_CHUNK_BYTES (1 << 16)
+// defines
+
+#define AQUARIUM_ILLEGAL_TEMPLATE_PREFIX '.'
 
 // enums
 
@@ -43,6 +41,11 @@ typedef struct {
 	char* aquarium_path;
 } aquarium_db_ent_t;
 
+typedef enum {
+	AQUARIUM_TEMPLATE_KIND_BASE,
+	AQUARIUM_TEMPLATE_KIND_KERNEL,
+} aquarium_template_kind_t;
+
 // function prototypes
 
 aquarium_opts_t* aquarium_opts_create(void);
@@ -50,4 +53,7 @@ void aquarium_opts_free(aquarium_opts_t* opts);
 
 bool aquarium_db_next_ent(aquarium_opts_t* opts, aquarium_db_ent_t* ent, size_t buf_len, char buf[buf_len], FILE* fp, bool be_dramatic);
 
-int create_aquarium(char const* path, char const* template, aquarium_opts_t* opts);
+int aquarium_download_template(aquarium_opts_t* opts, char const* path, char const* name, aquarium_template_kind_t kind);
+int aquarium_extract_template(aquarium_opts_t* opts, char const* path, char const* name, aquarium_template_kind_t kind);
+
+int create_aquarium(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template);

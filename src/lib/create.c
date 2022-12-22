@@ -10,8 +10,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#define ILLEGAL_TEMPLATE_PREFIX '.'
-
 static int ensure_struct(aquarium_opts_t* opts) {
 	int rv = -1;
 
@@ -97,7 +95,7 @@ err:
 	return rv;
 }
 
-int create_aquarium(char const* path, char const* template, aquarium_opts_t* opts) {
+int create_aquarium(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template) {
 	int rv = -1;
 
 	// make sure aquarium structure exists
@@ -108,7 +106,7 @@ int create_aquarium(char const* path, char const* template, aquarium_opts_t* opt
 
 	// make sure our template is legal
 
-	if (*template == ILLEGAL_TEMPLATE_PREFIX) {
+	if (*template == AQUARIUM_ILLEGAL_TEMPLATE_PREFIX) {
 		return -1;
 	}
 
@@ -188,9 +186,21 @@ int create_aquarium(char const* path, char const* template, aquarium_opts_t* opt
 		goto setuid_root_err;
 	}
 
+	// extract templates
+
+	if (template && aquarium_extract_template(opts, aquarium_path, template, AQUARIUM_TEMPLATE_KIND_BASE) < 0) {
+		goto extract_template_err;
+	}
+
+	if (kernel_template && aquarium_extract_template(opts, aquarium_path, kernel_template, AQUARIUM_TEMPLATE_KIND_KERNEL) < 0) {
+		goto extract_template_err;
+	}
+
 	// success
 
 	rv = 0;
+
+extract_template_err:
 
 	if (setuid(uid) < 0) {
 		warnx("setuid(%d): %s", uid, strerror(errno));

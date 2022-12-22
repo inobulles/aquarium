@@ -206,7 +206,7 @@ int create_aquarium(aquarium_opts_t* opts, char const* path, char const* templat
 
 	// write info to aquarium database
 
-	FILE* db_fp = fopen(opts->db_path, "a");
+	FILE* const db_fp = fopen(opts->db_path, "a");
 
 	if (!db_fp) {
 		warnx("fopen: failed to open %s for writing: %s", opts->db_path, strerror(errno));
@@ -215,9 +215,36 @@ int create_aquarium(aquarium_opts_t* opts, char const* path, char const* templat
 
 	fprintf(db_fp, "%s:%s\n", abs_path, aquarium_path);
 
+	// finish writing pointer file as user
+
+	if (setuid(uid) < 0) {
+		warnx("setuid(%d): %s", uid, strerror(errno));
+		goto setuid_user_err;
+	}
+
+	// change back to where we were & write to pointer file
+
+	if (chdir(cwd) < 0) {
+		warnx("chdir(\"%s\"): %s", cwd, strerror(errno));
+	}
+
+	FILE* pointer_fp = fopen(path, "wx");
+
+	if (!pointer_fp) {
+		warnx("fopen: failed to open %s for writing: %s", path, strerror(errno));
+		goto pointer_open_err;
+	}
+
+	fprintf(pointer_fp, "%s", aquarium_path);
+
 	// success
 
 	rv = 0;
+
+	fclose(pointer_fp);
+
+pointer_open_err:
+setuid_user_err:
 
 	fclose(db_fp);
 
@@ -246,6 +273,10 @@ pointer_file_exists_err:
 	free(aquarium_path);
 
 mkdtemp_err:
+
+	if (chdir(cwd) < 0) {
+		warnx("chdir(\"%s\"): %s", cwd, strerror(errno));
+	}
 
 	free(cwd);
 

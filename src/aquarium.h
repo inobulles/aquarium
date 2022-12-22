@@ -96,6 +96,7 @@ void aquarium_drives_free(aquarium_drive_t* drives, size_t drives_len);
 aquarium_drive_t* aquarium_drives_find(aquarium_drive_t* drives, size_t drives_len, char const* provider);
 
 int aquarium_format_new_table(aquarium_drive_t* drive);
+int aquarium_format_create_esp(aquarium_opts_t* opts, aquarium_drive_t* drive, char const* path);
 
 int aquarium_img_populate_esp(char const* path, char const* stage);
 int aquarium_img_out(aquarium_opts_t* opts, char const* path, char const* out);

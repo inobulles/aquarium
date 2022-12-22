@@ -184,3 +184,16 @@ void aquarium_drives_free(aquarium_drive_t* drives, size_t drives_len) {
 
 	free(drives);
 }
+
+aquarium_drive_t* aquarium_drives_find(aquarium_drive_t* drives, size_t drives_len, char const* provider) {
+	for (size_t i = 0; i < drives_len; i++) {
+		aquarium_drive_t* const drive = &drives[i];
+
+		if (!strcmp(drive->provider, provider)) {
+			return drive;
+		}
+	}
+
+	warnx("Couldn't find drive with provider '%s' (we tried our best 😟)", provider);
+	return NULL;
+}

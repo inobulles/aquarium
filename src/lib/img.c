@@ -1,11 +1,13 @@
 // #include <aquarium.h>
 #include "../aquarium.h"
+#include "copyfile.h"
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #define ENTROPY_BYTES 4096
@@ -16,7 +18,7 @@ static int update_fstab(aquarium_opts_t* opts, char const* _path) {
 	char* path;
 	if (asprintf(&path, "%s/etc/fstab", _path)) {}
 
-	FILE* fp = fopen(path, "w");
+	FILE* const fp = fopen(path, "w");
 
 	if (!fp) {
 		warnx("fopen(\"%s\"): %s", path, strerror(errno));
@@ -44,7 +46,7 @@ static int gen_entropy(char const* _path) {
 
 	// open random device
 
-	int random_fd = open("/dev/random", O_RDONLY);
+	int const random_fd = open("/dev/random", O_RDONLY);
 
 	if (random_fd < 0) {
 		warnx("open(\"/dev/random\"): %s", strerror(errno));
@@ -56,7 +58,7 @@ static int gen_entropy(char const* _path) {
 	char* path;
 	asprintf(&path, "%s/boot/entropy", _path);
 
-	int fd = open(path, O_CREAT | O_WRONLY, 0600 /* read/write by owner (root) */);
+	int const fd = open(path, O_CREAT | O_WRONLY, 0600 /* read/write by owner (root) */);
 
 	if (fd < 0) {
 		warnx("open(\"%s\"): %s", path, strerror(errno));
@@ -90,6 +92,82 @@ entropy_open_err:
 	free(path);
 
 random_open_err:
+
+	return rv;
+}
+
+static int create_esp(char const* stage, char const* path) {
+	int rv = -1;
+
+	// create EFI directory structure
+
+	char* stage_efi;
+	if (asprintf(&stage_efi, "%s/EFI", stage)) {}
+
+	if (mkdir(stage_efi, 0700) < 0) {
+		warnx("mkdir(\"%s\", 0700): %s", stage_efi, strerror(errno));
+		goto mkdir_stage_efi_err;
+	}
+
+	char* stage_efi_boot;
+	if (asprintf(&stage_efi_boot, "%s/BOOT", stage_efi)) {}
+
+	if (mkdir(stage_efi_boot, 0700) < 0) {
+		warnx("mkdir(\"%s\", 0700): %s", stage_efi_boot, strerror(errno));
+		goto mkdir_stage_efi_boot_err;
+	}
+
+	// copy over boot code
+
+	char* loader;
+	if (asprintf(&loader, "%s/boot/loader.efi", path)) {}
+
+	int const loader_fd = open(loader, O_RDONLY);
+
+	if (loader_fd < 0) {
+		warnx("open(\"%s\"): %s", loader, strerror(errno));
+		goto loader_open_err;
+	}
+
+	char* bootx64;
+	if (asprintf(&bootx64, "%s/BOOTX64.EFI", stage_efi_boot)) {}
+
+	int const bootx64_fd = creat(bootx64, 0660);
+
+	if (bootx64_fd < 0) {
+		warnx("create(\"%s\", 0660): %s", bootx64, strerror(errno));
+		goto bootx64_open_err;
+	}
+
+	if (fcopyfile(loader_fd, bootx64_fd, 0, COPYFILE_ALL) < 0) {
+		warnx("fcopyfile(\"%s\", \"%s\"): %s", loader, bootx64, strerror(errno));
+		goto copy_err;
+	}
+
+	// success
+
+	rv = 0;
+
+copy_err:
+
+	close(bootx64_fd);
+
+bootx64_open_err:
+
+	free(bootx64);
+	close(loader_fd);
+
+loader_open_err:
+
+	free(loader);
+
+mkdir_stage_efi_boot_err:
+
+	free(stage_efi_boot);
+
+mkdir_stage_efi_err:
+
+	free(stage_efi);
 
 	return rv;
 }

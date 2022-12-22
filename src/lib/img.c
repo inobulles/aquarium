@@ -215,7 +215,7 @@ static int create_esp(aquarium_opts_t* opts, char const* path) {
 		_exit(EXIT_FAILURE);
 	}
 
-	int child_rv = __aquarium_wait_for_process(pid);
+	int const child_rv = __aquarium_wait_for_process(pid);
 
 	if (child_rv < 0) {
 		warnx("Child ESP image creation process exited with error code %d", child_rv);

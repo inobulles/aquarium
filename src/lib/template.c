@@ -342,11 +342,11 @@ int aquarium_extract_template(aquarium_opts_t* opts, char const* path, char cons
 			break;
 		}
 
-		const char* error_string = archive_error_string(archive);
-		unsigned useless_warning = error_string && !strcmp(error_string, "Can't restore time");
+		char const* const err = archive_error_string(archive);
+		bool const useless_warning = err && !strcmp(err, "Can't restore time");
 
 		if (res != ARCHIVE_OK && !(res == ARCHIVE_WARN && useless_warning)) {
-			warnx("archive_read_next_header: %s", error_string);
+			warnx("archive_read_next_header: %s", err);
 			goto archive_read_header_err;
 		}
 	}

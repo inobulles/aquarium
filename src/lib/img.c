@@ -96,7 +96,7 @@ random_open_err:
 	return rv;
 }
 
-static int create_esp(char const* stage, char const* path) {
+static int populate_esp(char const* stage, char const* path) {
 	int rv = -1;
 
 	// create EFI directory structure
@@ -172,6 +172,69 @@ mkdir_stage_efi_err:
 	return rv;
 }
 
+static int create_esp(aquarium_opts_t* opts, char const* path) {
+	int rv = -1;
+
+	// create ESP stage
+
+	char* stage = strdup("/tmp/aquarium-esp-stage-XXXXXXX");
+	stage = mkdtemp(stage);
+
+	if (!stage) {
+		warnx("mkdtemp: failed to create ESP staging directory: %s", strerror(errno));
+		goto mkdtemp_err;
+	}
+
+	// populate ESP
+
+	if (populate_esp(stage, path) < 0) {
+		goto populate_err;
+	}
+
+	// create ESP image from stage
+
+	pid_t pid = fork();
+
+	if (!pid) {
+		// child process
+		// don't care about freeing anything in here
+
+		char* oem_string_opt;
+		if (asprintf(&oem_string_opt, "-oOEM_string=%s", opts->esp_oem)) {}
+
+		char* label_opt;
+		if (asprintf(&label_opt, "-ovolume_label=%s", opts->esp_vol_label)) {}
+
+		execl(
+			"/usr/sbin/makefs", "/usr/sbin/makefs",                // 'makefs' binary location
+			"-tmsdos", "-ofat_type=12", "-osectors_per_cluster=1", // filesystem options
+			"-s1m", oem_string_opt, label_opt,                     // more filesystem options
+			"esp.img", stage,                                      // output/input paths
+			NULL);
+
+		_exit(EXIT_FAILURE);
+	}
+
+	int child_rv = __aquarium_wait_for_process(pid);
+
+	if (child_rv < 0) {
+		warnx("Child ESP image creation process exited with error code %d", child_rv);
+		goto create_esp_err;
+	}
+
+	// success
+
+	rv = 0;
+
+create_esp_err:
+populate_err:
+mkdtemp_err:
+
+	free(stage);
+
+	return rv;
+}
+
 int aquarium_img_out(aquarium_opts_t* opts, char const* _path, char const* out) {
 	char* const path = aquarium_db_read_pointer_file(opts, _path);
 
@@ -193,6 +256,14 @@ int aquarium_img_out(aquarium_opts_t* opts, char const* _path, char const* out) 
 	if (gen_entropy(path) < 0) {
 		return -1;
 	}
+
+	// create ESP
+
+	if (create_esp(opts, path) < 0) {
+		return -1;
+	}
+
+	(void) out;
 
 	return 0;
 }

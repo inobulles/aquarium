@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 
 // defines
 
@@ -94,3 +95,20 @@ int aquarium_drives_read(aquarium_drive_t** drives_ref, size_t* drives_len_ref);
 void aquarium_drives_free(aquarium_drive_t* drives, size_t drives_len);
 
 int aquarium_img_out(aquarium_opts_t* opts, char const* path, char const* out);
+
+// internal functions common to all source files
+
+__attribute__((unused)) static int __aquarium_wait_for_process(pid_t pid) {
+	int wstatus = 0;
+	while (waitpid(pid, &wstatus, 0) > 0);
+
+	if (WIFSIGNALED(wstatus)) {
+		return -1;
+	}
+
+	if (WIFEXITED(wstatus)) {
+		return WEXITSTATUS(wstatus);
+	}
+
+	return -1;
+}

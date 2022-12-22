@@ -10,19 +10,38 @@ var cc = CC.new()
 cc.add_opt("-std=c99")
 cc.add_opt("-isystem=/usr/local/include")
 cc.add_opt("-L/usr/local/lib")
+cc.add_opt("-fPIC")
 cc.add_opt("-Wall")
 cc.add_opt("-Wextra")
 
-var src = File.list("src")
+var lib_src = File.list("src/lib")
 	.where { |path| path.endsWith(".c") }
+
+var cmd_src = File.list("src/cmd")
+	.where { |path| path.endsWith(".c") }
+
+var src = lib_src.toList + cmd_src.toList
 
 src
 	.each { |path| cc.compile(path) }
 
-// linking
+// create static & dynamic libraries
 
 var linker = Linker.new(cc)
-linker.link(src.toList, ["archive", "copyfile", "crypto", "fetch", "geom", "jail", "mkfs_msdos", "pkg", "zfs"], "aquarium")
+
+linker.archive(lib_src.toList, "libaquarium.a")
+linker.link(lib_src.toList, ["archive", "copyfile", "crypto", "fetch", "geom", "jail", "mkfs_msdos", "pkg", "zfs"], "libaquarium.so", true)
+
+// create command-line frontend
+// XXX in fine, we won't need all these dependencies; they're only here while libaquarium is being worked on
+
+linker.link(cmd_src.toList, ["aquarium", "archive", "copyfile", "crypto", "fetch", "jail"], "aquarium")
+
+// copy over headers
+
+File.list("src", 1)
+	.where { |path| path.endsWith(".h") }
+	.each  { |path| Resources.install(path) }
 
 // running
 
@@ -31,9 +50,6 @@ class Runner {
 }
 
 // installation map
-// TODO how will setuid work?
-// for reference: chmod u+s aquarium && chown root:wheel aquarium
-// probably should be in the build stage right? or the runner won't work...
 
 class Installer {
 	static aquarium(path) {
@@ -45,7 +61,10 @@ class Installer {
 }
 
 var install = {
-	"aquarium": "%(Meta.prefix())/bin/aquarium",
+	"aquarium":       "%(Meta.prefix())/bin/aquarium",
+	"libaquarium.a":  "%(Meta.prefix())/lib/libaquarium.a",
+	"libaquarium.so": "%(Meta.prefix())/lib/libaquarium.so",
+	"aquarium.h":     "%(Meta.prefix())/include/aquarium.h",
 }
 
 // testing

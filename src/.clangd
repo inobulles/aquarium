@@ -1,0 +1,14 @@
+CompileFlags:
+  Add:
+    - -std=c11
+    - -Wall
+    - -Wextra
+    - -I/usr/local/include
+    - -Ilib
+Diagnostics:
+  UnusedIncludes: Strict
+  ClangTidy:
+    Add: modernize*
+    WarnOnSizeOfPointerToAggregate: false
+InlayHints:
+  ParameterNames: No

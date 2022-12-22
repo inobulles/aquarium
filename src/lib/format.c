@@ -3,14 +3,21 @@
 #include <err.h>
 #include <errno.h>
 #include <libgeom.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <mkfs_msdos.h>
+#include <sys/mount.h>
+#include <sys/uio.h>
 
 #define ESP_ALIGN 4096 // 4k boundary
 #define ZFS_ALIGN (1024 * 1024) // 1m boundary
 
 #define MIN_FAT32_CLUSTERS 66581
+
+#define IOV(name, val) \
+	(struct iovec) { .iov_base = (name), .iov_len = strlen((name)) + 1 }, \
+	(struct iovec) { .iov_base = (val ), .iov_len = strlen((val )) + 1 }
 
 static uint64_t align(x, bound) {
 	return x + bound - (x - 1) % bound - 1;
@@ -236,7 +243,7 @@ int aquarium_format_create_esp(aquarium_opts_t* opts, aquarium_drive_t* drive, c
 		goto part_names_err;
 	}
 
-	// create FAT32 partition for the ESP
+	// create FAT32 filesystem on the ESP
 
 	struct msdos_options options = {
 		.OEM_string = opts->esp_oem,
@@ -252,11 +259,44 @@ int aquarium_format_create_esp(aquarium_opts_t* opts, aquarium_drive_t* drive, c
 	snprintf(esp_dev_path, sizeof esp_dev_path, "/dev/%s", part_names[0]);
 
 	if (mkfs_msdos(esp_dev_path, NULL, &options) < 0) {
-		fprintf(stderr, "Failed to create FAT32 filesystem in ESP\n");
+		warnx("Failed to create FAT32 filesystem in ESP\n");
 		goto mkfs_err;
 	}
 
+	// mount ESP
+
+	char* mountpoint;
+	if (asprintf(&mountpoint, "%s/boot/efi", path)) {}
+
+	struct iovec iov[] = {
+		IOV("fstype", "msdosfs"),
+		IOV("fspath", mountpoint),
+		IOV("from", esp_dev_path),
+		IOV("longnames", ""),
+	};
+
+	if (nmount(iov, sizeof(iov) / sizeof(*iov), 0) < 0) {
+		warnx("nmount(\"%s\", \"%s\"): %s\n", esp_dev_path, mountpoint, strerror(errno));
+		goto mount_err;
+	}
+
+	// finally, populate the ESP
+
+	if (aquarium_img_populate_esp(path, mountpoint) < 0) {
+		goto populate_err;
+	}
+
 	rv = 0;
+
+populate_err:
+
+	if (unmount(mountpoint, 0) < 0) {
+		warnx("unmount(\"%s\"): %s", mountpoint, strerror(errno));
+	}
+
+mount_err:
+
+	free(mountpoint);
 
 mkfs_err:
 

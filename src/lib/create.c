@@ -56,7 +56,7 @@ static int ensure_struct(aquarium_opts_t* opts) {
 	// try creating sanctioned templates file
 
 	if (access(opts->sanctioned_path, R_OK) < 0) {
-		FILE* fp = fopen(opts->sanctioned_path, "wx");
+		FILE* const fp = fopen(opts->sanctioned_path, "wx");
 
 		if (!fp) {
 			warnx("fopen(\"%s\"): %s", opts->sanctioned_path, strerror(errno));
@@ -72,7 +72,7 @@ static int ensure_struct(aquarium_opts_t* opts) {
 	// try creating aquarium database file
 
 	if (access(opts->db_path, R_OK) < 0) {
-		int fd = creat(opts->db_path, MODE);
+		int const fd = creat(opts->db_path, MODE);
 
 		if (!fd) {
 			warnx("creat(\"%s\", 0%o): %s", opts->db_path, MODE, strerror(errno));
@@ -98,6 +98,8 @@ err:
 }
 
 int create_aquarium(char const* path, char const* template, aquarium_opts_t* opts) {
+	int rv = -1;
+
 	// make sure aquarium structure exists
 
 	if (ensure_struct(opts) < 0) {
@@ -112,21 +114,94 @@ int create_aquarium(char const* path, char const* template, aquarium_opts_t* opt
 
 	// remember our current working directory for later
 
-	char* cwd = getcwd(NULL, 0);
+	char* const cwd = getcwd(NULL, 0);
 
 	if (!cwd) {
-		errx(EXIT_FAILURE, "getcwd: %s", strerror(errno));
+		warnx("getcwd: %s", strerror(errno));
+		goto getcwd_err;
 	}
-
-	(void) path;
-	return -1;
 
 	// generate final aquarium path
 
-	char* aquarium_path;
-	if (asprintf(&aquarium_path, "%s%s-XXXXXXX", opts->aquariums_path, template)) {}
+	char* _aquarium_path;
+	if (asprintf(&_aquarium_path, "%s%s-XXXXXXX", opts->aquariums_path, template)) {}
+
+	char* const aquarium_path = mkdtemp(_aquarium_path);
+	free(_aquarium_path);
+
+	if (!aquarium_path) {
+		warnx("mkdtemp(\"%s\"): failed to create aquarium directory: %s", _aquarium_path, strerror(errno));
+		goto mkdtemp_err;
+	}
+
+	// check that pointer file isn't already in the aquarium database
+	// if it doesn't yet exist, the 'realpath' call will fail (which we don't want if 'flags & FLAGS_CREATE')
+	// although it's cumbersome, I really wanna use realpath here to reduce points of failure
+	// to be honest, I think it's a mistake not to have included a proper way of checking path hierarchy in POSIX
+	// TODO haven't yet thought about how safe this'd be, but since the aquarium database also contains what the pointer file was supposed to point to, maybe it could be cool for this to automatically regenerate the pointer file instead of erroring?
+
+	if (!access(path, F_OK)) {
+		warnx("Pointer file %s already exists", path);
+		goto pointer_file_exists_err;
+	}
+
+	int const fd = creat(path, 0 /* don't care about mode */);
+
+	if (!fd) {
+		warnx("creat(\"%s\"): %s", path, strerror(errno));
+		goto creat_err;
+	}
+
+	char* const abs_path = realpath(path, NULL);
+
+	close(fd);
+	remove(path);
+
+	if (!abs_path) {
+		warnx("realpath(\"%s\"): %s", path, strerror(errno));
+		goto abs_path_err;
+	}
+
+	FILE* const fp = fopen(opts->db_path, "r");
+
+	if (!fp) {
+		warnx("fopen: failed to open %s for reading: %s", opts->db_path, strerror(errno));
+		goto db_read_err;
+	}
+
+	char buf[1024];
+	aquarium_db_ent_t ent;
+
+	while (aquarium_next_db_ent(opts, &ent, sizeof buf, buf, fp, true)) {
+		if (!strcmp(ent.pointer_path, abs_path)) {
+			warnx("Pointer file already exists in the aquarium database at %s (pointer file is supposed to reside at %s and point to %s)", opts->db_path, ent.pointer_path, ent.aquarium_path);
+			goto pointer_file_exists_db_err;
+		}
+	}
+
+	// success
+
+	rv = 0;
+
+pointer_file_exists_db_err:
+
+	fclose(fp);
+
+db_read_err:
+
+	free(abs_path);
+
+abs_path_err:
+creat_err:
+pointer_file_exists_err:
+
+	free(aquarium_path);
+
+mkdtemp_err:
 
 	free(cwd);
 
-	return 0;
+getcwd_err:
+
+	return rv;
 }

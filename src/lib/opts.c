@@ -40,7 +40,7 @@ aquarium_opts_t* aquarium_opts_create(void) {
 
 	// make sure the $STONERS_GROUP group exists, and error if not
 
-	struct group* stoners_group = getgrnam(STONERS_GROUP);
+	struct group* const stoners_group = getgrnam(STONERS_GROUP);
 
 	if (!stoners_group) {
 		warnx("Couldn't find \"" STONERS_GROUP "\" group");
@@ -51,7 +51,7 @@ aquarium_opts_t* aquarium_opts_create(void) {
 
 	// make sure user is part of the $STONERS_GROUP group
 
-	struct passwd* passwd = getpwuid(uid);
+	struct passwd* const passwd = getpwuid(uid);
 	char** stoners = stoners_group->gr_mem;
 
 	while (*stoners) {

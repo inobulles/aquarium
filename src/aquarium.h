@@ -4,6 +4,8 @@
 
 // defines
  
+#include <stdbool.h>
+#include <stdio.h>
 #include <sys/types.h>
 
 #define AQUARIUM_PROGRESS_FREQUENCY  (1 << 22)
@@ -36,9 +38,16 @@ typedef struct {
 	char* db_path;
 } aquarium_opts_t;
 
+typedef struct {
+	char* pointer_path;
+	char* aquarium_path;
+} aquarium_db_ent_t;
+
 // function prototypes
 
 aquarium_opts_t* aquarium_opts_create(void);
 void aquarium_opts_free(aquarium_opts_t* opts);
+
+bool aquarium_next_db_ent(aquarium_opts_t* opts, aquarium_db_ent_t* ent, size_t buf_len, char buf[buf_len], FILE* fp, bool be_dramatic);
 
 int create_aquarium(char const* path, char const* template, aquarium_opts_t* opts);

@@ -248,7 +248,7 @@ static int create_rootfs(aquarium_opts_t* opts, char const* path) {
 	pid_t const pid = fork();
 
 	if (pid < 0) {
-		warnx("mkdtemp: failed to create ESP staging directory: %s", strerror(errno));
+		warnx("fork: %s", strerror(errno));
 		return -1;
 	}
 
@@ -272,6 +272,53 @@ static int create_rootfs(aquarium_opts_t* opts, char const* path) {
 
 	if (child_rv < 0) {
 		warnx("Child rootfs image creation process exited with error code %d", child_rv);
+		return -1;
+	}
+
+	return 0;
+}
+
+static int create_img(aquarium_opts_t* opts, char const* path, char const* out) {
+	// combine 'esp.img' & 'rootfs.img' into a final bootable image
+
+	pid_t const pid = fork();
+
+	if (pid < 0) {
+		warnx("fork: %s", strerror(errno));
+		return -1;
+	}
+
+	if (!pid) {
+		// child process
+		// don't care about freeing anything in here
+
+		char* pmbr;
+		if (asprintf(&pmbr, "-b%s/boot/pmbr", path)) {}
+
+		char* gptboot;
+		if (asprintf(&gptboot, "-pfreebsd-boot/bootfs:=%s/boot/gptboot", path)) {}
+
+		char* esp;
+		if (asprintf(&esp, "-pefi/%s:=esp.img", opts->esp_label)) {}
+
+		char* ufs;
+		if (asprintf(&ufs, "-pfreebsd-ufs/%s:=rootfs.img", opts->rootfs_label)) {}
+
+		execl(
+			"/usr/bin/mkimg", "/usr/bin/mkimg", // 'mkimg' binary location
+			"-sgpt", "-fraw",                   // partition table & image type options
+			pmbr,                               // MBR bootcode (for legacy BIOS booting yeah)
+			gptboot, esp, ufs,                  // different partitions
+			"-o", out,                          // output path
+			NULL);
+
+		_exit(EXIT_FAILURE);
+	}
+
+	int child_rv = __aquarium_wait_for_process(pid);
+
+	if (child_rv < 0) {
+		warnx("Child final bootable image creation process exited with error code %d", child_rv);
 		return -1;
 	}
 
@@ -312,9 +359,11 @@ int aquarium_img_out(aquarium_opts_t* opts, char const* _path, char const* out) 
 		return -1;
 	}
 
-	// TODO
+	// combine ESP & rootfs partitions into final bootable image
 
-	(void) out;
+	if (create_img(opts, path, out) < 0) {
+		return -1;
+	}
 
 	return 0;
 }

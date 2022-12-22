@@ -86,15 +86,7 @@ static char* out_path = NULL;
 static char* path = NULL;
 
 static bool persist = false;
-static char* base_path = DEFAULT_BASE_PATH;
 static bool vnet_disable = false;
-
-static char* templates_path;
-static char* kernels_path;
-static char* aquariums_path;
-
-static char* sanctioned_templates;
-static char* aquarium_db_path;
 
 static void usage(void) {
 	fprintf(stderr,
@@ -212,10 +204,10 @@ static inline int __wait_for_process(pid_t pid) {
 // actions
 
 static int do_list(aquarium_opts_t* opts) {
-	FILE* fp = fopen(aquarium_db_path, "r");
+	FILE* fp = fopen(opts->db_path, "r");
 
 	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", aquarium_db_path, strerror(errno));
+		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", opts->db_path, strerror(errno));
 	}
 
 	printf("POINTER\tAQUARIUM\n");
@@ -273,8 +265,8 @@ static inline void __list_templates_dir(const char* path, const char* kind) {
 }
 
 static int do_list_templates(aquarium_opts_t* opts) {
-	__list_templates_dir(templates_path, "BASE");
-	__list_templates_dir(kernels_path, "KERNEL");
+	__list_templates_dir(opts->templates_path, "BASE");
+	__list_templates_dir(opts->kernels_path, "KERNEL");
 
 	return EXIT_SUCCESS;
 }
@@ -290,281 +282,6 @@ static int do_list_templates(aquarium_opts_t* opts) {
 //  - write path of pointer file & its associated aquarium to aquarium database (and give it some unique ID)
 //  - setuid user (CHECK FOR ERRORS!)
 //  - write unique ID to pointer file
-
-typedef enum {
-	TEMPLATE_KIND_BASE, TEMPLATE_KIND_KERNEL
-} template_kind_t;
-
-static inline void __download_template(const char* save_path, const char* template, template_kind_t wanted_template_kind) {
-	// read list of sanctioned templates, and see if we have a match
-
-	FILE* fp = fopen(sanctioned_templates, "r");
-
-	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", sanctioned_templates, strerror(errno));
-	}
-
-	char buf[1024]; // I don't super like doing this, but it's unlikely we'll run into any problems
-	char* line;
-
-	template_kind_t template_kind;
-	char* name;
-	char* protocol;
-	char* url;
-	size_t bytes;
-	char* sha256;
-
-	while ((line = fgets(buf, sizeof buf, fp))) { // fgets reads one less than 'size', so we're fine just padding 'sizeof buf'
-		enum {
-			TYPE, NAME, PROTOCOL, URL, BYTES, SHA256, SENTINEL
-		} kind = 0;
-
-		template_kind = 0;
-		name = NULL;
-		protocol = NULL;
-		url = NULL;
-		bytes = 0;
-		sha256 = NULL;
-
-		char* tok;
-
-		while ((tok = strsep(&line, ":"))) {
-			if (kind == TYPE) {
-				if (*tok == 'b') {
-					template_kind = TEMPLATE_KIND_BASE;
-				}
-
-				else if (*tok == 'k') {
-					template_kind = TEMPLATE_KIND_KERNEL;
-				}
-
-				else {
-					errx(EXIT_FAILURE, "Unknown template kind ('%s')", tok);
-				}
-
-				if (template_kind != wanted_template_kind) {
-					goto next;
-				}
-			}
-
-			else if (kind == NAME) {
-				name = tok;
-
-				if (strcmp(name, template)) {
-					goto next;
-				}
-			}
-
-			else if (kind == PROTOCOL) {
-				protocol = tok;
-			}
-
-			else if (kind == URL) {
-				url = tok;
-			}
-
-			else if (kind == BYTES) {
-				__attribute__((unused)) char* endptr;
-				bytes = strtol(tok, &endptr, 10);
-			}
-
-			else if (kind == SHA256) {
-				sha256 = tok;
-				sha256[strlen(sha256) - 1] = '\0';
-			}
-
-			if (++kind >= SENTINEL) {
-				break;
-			}
-		}
-
-		// we've found our template at this point
-
-		goto found;
-
-	next:
-
-		continue;
-	}
-
-	// we didn't find our template, unfortunately :(
-
-	fclose(fp);
-	errx(EXIT_FAILURE, "Couldn't find template %s in list of sanctioned templates (%s)", template, sanctioned_templates);
-
-found:
-
-	fclose(fp);
-
-	// found template, start downloading it
-	// it's initially downloaded with a '.' prefix, because otherwise, there's a potential for a race condition
-	// e.g., if we downloaded it in its final destination, the template could be malicious, and an actor could coerce the user into creating an aquarium from that template before the checks have terminated
-	// realistically, there's a slim chance of this, unless said malicious actor could somehow stall the SHA256 digesting, but we shouldn't rely on this if we can help it
-
-	char* composed_url;
-	asprintf(&composed_url, "%s://%s", protocol, url);
-
-	printf("Found template, downloading from %s ...\n", composed_url);
-
-	char* path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
-	asprintf(&path, "%s%c%s.txz", save_path, ILLEGAL_TEMPLATE_PREFIX, name);
-
-	/* FILE* */ fp = fopen(path, "w");
-
-	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", path, strerror(errno));
-	}
-
-	FILE* fetch_fp = fetchGetURL(composed_url, "");
-
-	if (!fetch_fp) {
-		fclose(fp);
-		errx(EXIT_FAILURE, "Failed to download %s", composed_url);
-	}
-
-	free(composed_url);
-
-	// checking (size & hash) stuff
-
-	size_t total = 0;
-
-	SHA256_CTX sha_context;
-	SHA256_Init(&sha_context);
-
-	// start download
-
-	uint8_t chunk[FETCH_CHUNK_BYTES];
-	size_t chunk_bytes;
-
-	while ((chunk_bytes = fread(chunk, 1, sizeof chunk, fetch_fp)) > 0) {
-		total += chunk_bytes;
-
-		if (!(total % PROGRESS_FREQUENCY)) {
-			float progress = (float) total / bytes;
-			printf("Downloading %f%% done\n", progress * 100);
-		}
-
-		SHA256_Update(&sha_context, chunk, chunk_bytes);
-
-		if (fwrite(chunk, 1, chunk_bytes, fp) < chunk_bytes) {
-			break;
-		}
-	}
-
-	// clean up & process SHA256 digest
-
-	fclose(fp);
-	fclose(fetch_fp);
-
-	uint8_t hash[SHA256_DIGEST_LENGTH];
-	SHA256_Final(hash, &sha_context);
-
-	char hash_hex[SHA256_DIGEST_LENGTH * 2 + 1] = { 0 }; // each byte in the hash can be represented with two hex digits
-
-	for (size_t i = 0; i < sizeof hash; i++) {
-		snprintf(hash_hex, sizeof hash_hex, "%s%02x", hash_hex, hash[i]);
-	}
-
-	// template has been downloaded, check its size & SHA256 hash
-
-	if (total != bytes) {
-		if (remove(path) < 0) {
-			errx(EXIT_FAILURE, "remove: failed to remove %s: %s", path, strerror(errno));
-		}
-
-		errx(EXIT_FAILURE, "Total size of downloaded template (%zu bytes) is not the size expected (%zu bytes). Someone may be trying to swindle you!", total, bytes);
-	}
-
-	if (strcmp(hash_hex, sha256)) {
-		if (remove(path) < 0) {
-			errx(EXIT_FAILURE, "remove: failed to remove %s: %s", path, strerror(errno));
-		}
-
-		errx(EXIT_FAILURE, "SHA256 hash of downloaded template (%s) is not the same as expected (%s). Someone may be trying to swindle you!", hash_hex, sha256);
-	}
-
-	// checks have succeeded; move temporary file to permanent position
-
-	char* final_path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
-	asprintf(&final_path, "%s%s.txz", save_path, name);
-
-	if (rename(path, final_path) < 0) {
-		errx(EXIT_FAILURE, "rename: failed to rename %s to %s: %s", path, final_path, strerror(errno));
-	}
-}
-
-static inline void __extract_template(const char* aquarium_path, const char* name, template_kind_t kind) {
-	if (!name) {
-		return;
-	}
-
-	// where should we look for templates?
-
-	char* search_path = templates_path;
-
-	if (kind == TEMPLATE_KIND_KERNEL) {
-		search_path = kernels_path;
-	}
-
-	// build template path
-	// attempt to download it if it don't already exist
-
-	char* template_path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
-	asprintf(&template_path, "%s%s.txz", search_path, name);
-
-	if (access(template_path, F_OK) < 0) {
-		// file template doesn't yet exist; download & check it
-		__download_template(search_path, name, kind);
-	}
-
-	// make & change into final aquarium directory
-	// as per archive_write_disk(3)'s "BUGS" section, we mustn't call 'chdir' between opening and closing archive objects
-
-	if (chdir(aquarium_path) < 0) {
-		errx(EXIT_FAILURE, "chdir: %s", strerror(errno));
-	}
-
-	// open archive
-
-	struct archive* archive = archive_read_new();
-
-	archive_read_support_filter_all(archive);
-	archive_read_support_format_all(archive);
-
-	if (archive_read_open_filename(archive, template_path, ARCHIVE_CHUNK_BYTES) < 0) {
-		errx(EXIT_FAILURE, "archive_read_open_filename: failed to open %s template: %s", template_path, archive_error_string(archive));
-	}
-
-	// extract archive
-
-	while (1) {
-		struct archive_entry* entry;
-		int res = archive_read_next_header(archive, &entry);
-
-		if (res == ARCHIVE_OK) {
-			// TODO when multithreading, the 'ARCHIVE_EXTRACT_ACL' flag results in a bus error
-			//      it would seem as though there is a bug in 'libarchive', but unfortunately I have not yet had the time to resolve it
-
-			res = archive_read_extract(archive, entry, ARCHIVE_EXTRACT_TIME | ARCHIVE_EXTRACT_OWNER | ARCHIVE_EXTRACT_PERM | /*ARCHIVE_EXTRACT_ACL |*/ ARCHIVE_EXTRACT_XATTR | ARCHIVE_EXTRACT_FFLAGS);
-		}
-
-		if (res == ARCHIVE_EOF) {
-			break;
-		}
-
-		const char* error_string = archive_error_string(archive);
-		unsigned useless_warning = error_string && !strcmp(error_string, "Can't restore time");
-
-		if (res != ARCHIVE_OK && !(res == ARCHIVE_WARN && useless_warning)) {
-			errx(EXIT_FAILURE, "archive_read_next_header: %s", error_string);
-		}
-	}
-
-	// reached success
-
-	archive_read_close(archive);
-	archive_read_free(archive);
-}
 
 static int do_create(aquarium_opts_t* opts) {
 	if (!path) {
@@ -586,7 +303,7 @@ static int do_create(aquarium_opts_t* opts) {
 	// generate final aquarium path
 
 	char* aquarium_path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
-	asprintf(&aquarium_path, "%s%s-XXXXXXX", aquariums_path, template);
+	asprintf(&aquarium_path, "%s%s-XXXXXXX", opts->aquariums_path, template);
 
 	aquarium_path = mkdtemp(aquarium_path);
 
@@ -620,10 +337,10 @@ static int do_create(aquarium_opts_t* opts) {
 		errx(EXIT_FAILURE, "realpath(\"%s\"): %s", path, strerror(errno));
 	}
 
-	FILE* fp = fopen(aquarium_db_path, "r");
+	FILE* fp = fopen(opts->db_path, "r");
 
 	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", aquarium_db_path, strerror(errno));
+		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", opts->db_path, strerror(errno));
 	}
 
 	char buf[1024];
@@ -631,7 +348,7 @@ static int do_create(aquarium_opts_t* opts) {
 
 	while (aquarium_db_next_ent(opts, &ent, sizeof buf, buf, fp, true)) {
 		if (!strcmp(ent.pointer_path, abs_path)) {
-			errx(EXIT_FAILURE, "Pointer file already exists in the aquarium database at %s (pointer file is supposed to reside at %s and point to %s)", aquarium_db_path, ent.pointer_path, ent.aquarium_path);
+			errx(EXIT_FAILURE, "Pointer file already exists in the aquarium database at %s (pointer file is supposed to reside at %s and point to %s)", opts->db_path, ent.pointer_path, ent.aquarium_path);
 		}
 	}
 
@@ -647,8 +364,8 @@ static int do_create(aquarium_opts_t* opts) {
 
 	// extract templates
 
-	__extract_template(aquarium_path, template, TEMPLATE_KIND_BASE);
-	__extract_template(aquarium_path, kernel_template, TEMPLATE_KIND_KERNEL);
+	(void) (template && aquarium_extract_template(opts, aquarium_path, template, AQUARIUM_TEMPLATE_KIND_BASE) < 0);
+	(void) (kernel_template && aquarium_extract_template(opts, aquarium_path, kernel_template, AQUARIUM_TEMPLATE_KIND_KERNEL) < 0);
 
 	// copy over /etc/resolv.conf for networking to, well, work
 
@@ -660,10 +377,10 @@ static int do_create(aquarium_opts_t* opts) {
 
 	// write info to aquarium database
 
-	/* FILE* */ fp = fopen(aquarium_db_path, "a");
+	/* FILE* */ fp = fopen(opts->db_path, "a");
 
 	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", aquarium_db_path, strerror(errno));
+		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", opts->db_path, strerror(errno));
 	}
 
 	fprintf(fp, "%s:%s\n", abs_path, aquarium_path);
@@ -1083,10 +800,10 @@ static int do_sweep(aquarium_opts_t* opts) {
 
 	// go through aquarium database
 
-	FILE* fp = fopen(aquarium_db_path, "r");
+	FILE* fp = fopen(opts->db_path, "r");
 
 	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", aquarium_db_path, strerror(errno));
+		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", opts->db_path, strerror(errno));
 	}
 
 	char buf[1024];
@@ -1139,7 +856,7 @@ static int do_sweep(aquarium_opts_t* opts) {
 
 	// keep things nice and clean is to go through everything under /etc/aquariums/aquariums and see which aquariums were never "recensés" (censused?)
 
-	DIR* dp = opendir(aquariums_path);
+	DIR* dp = opendir(opts->aquariums_path);
 
 	if (!dp) {
 		errx(EXIT_FAILURE, "opendir: %s", strerror(errno));
@@ -1168,7 +885,7 @@ static int do_sweep(aquarium_opts_t* opts) {
 		// ah! couldn't find the aquarium in the list of survivors! remove it!
 
 		char* aquarium_path;
-		asprintf(&aquarium_path, "%s/%s", aquariums_path, name);
+		asprintf(&aquarium_path, "%s/%s", opts->aquariums_path, name);
 
 		__remove_aquarium(aquarium_path);
 		free(aquarium_path);
@@ -1182,10 +899,10 @@ static int do_sweep(aquarium_opts_t* opts) {
 
 	// last thing to do is rebuild new aquarium database file with the entries that survived
 
-	/* FILE* */ fp = fopen(aquarium_db_path, "w");
+	/* FILE* */ fp = fopen(opts->db_path, "w");
 
 	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", aquarium_db_path, strerror(errno));
+		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", opts->db_path, strerror(errno));
 	}
 
 	for (size_t i = 0; i < survivors_len; i++) {
@@ -1672,7 +1389,7 @@ int main(int argc, char* argv[]) {
 		}
 
 		else if (c == 'r') {
-			base_path = optarg;
+			opts->base_path = optarg;
 		}
 
 		else if (c == 'v') {
@@ -1747,13 +1464,14 @@ int main(int argc, char* argv[]) {
 
 	// generate various paths relative to the base path
 	// we don't really care about freeing these
+	// TODO there should really be facilities in libaquarium for this
 
-	asprintf(&templates_path,       "%s/" TEMPLATES_PATH,       base_path);
-	asprintf(&kernels_path,         "%s/" KERNELS_PATH,         base_path);
-	asprintf(&aquariums_path,       "%s/" AQUARIUMS_PATH,       base_path);
+	asprintf(&opts->templates_path,  "%s/" TEMPLATES_PATH,       opts->base_path);
+	asprintf(&opts->kernels_path,    "%s/" KERNELS_PATH,         opts->base_path);
+	asprintf(&opts->aquariums_path,  "%s/" AQUARIUMS_PATH,       opts->base_path);
 
-	asprintf(&sanctioned_templates, "%s/" SANCTIONED_TEMPLATES, base_path);
-	asprintf(&aquarium_db_path,     "%s/" AQUARIUM_DB_PATH,     base_path);
+	asprintf(&opts->sanctioned_path, "%s/" SANCTIONED_TEMPLATES, opts->base_path);
+	asprintf(&opts->db_path,         "%s/" AQUARIUM_DB_PATH,     opts->base_path);
 
 	// skip this stuff if we're root
 	// note that aquariums created as root won't be accessible by members of the stoners group

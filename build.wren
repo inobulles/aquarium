@@ -52,7 +52,7 @@ File.list("src", 1)
 // running
 
 class Runner {
-	static run(args) { File.exec("aquarium", args) }
+	static run(args) { File.exec("installer", args) }
 }
 
 // installation map

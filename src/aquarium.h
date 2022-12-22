@@ -18,6 +18,20 @@ typedef enum {
 	AQUARIUM_OS_LINUX,
 } aquarium_os_info_t;
 
+typedef enum {
+	AQUARIUM_TEMPLATE_KIND_BASE,
+	AQUARIUM_TEMPLATE_KIND_KERNEL,
+} aquarium_template_kind_t;
+
+typedef enum {
+	AQUARIUM_DRIVE_KIND_MD,    // memory disk
+	AQUARIUM_DRIVE_KIND_ADA,   // ATA direct access
+	AQUARIUM_DRIVE_KIND_DA,    // SCSI direct access
+	AQUARIUM_DRIVE_KIND_NVME,  // NVMe
+	AQUARIUM_DRIVE_KIND_CD,    // optical disk
+	AQUARIUM_DRIVE_KIND_OTHER, // could be 'mmcsd', 'mmc', 'at91_mci', or 'sdhci'
+} aquarium_drive_kind_t;
+
 // structs
 
 typedef struct {
@@ -41,10 +55,20 @@ typedef struct {
 	char* aquarium_path;
 } aquarium_db_ent_t;
 
-typedef enum {
-	AQUARIUM_TEMPLATE_KIND_BASE,
-	AQUARIUM_TEMPLATE_KIND_KERNEL,
-} aquarium_template_kind_t;
+typedef struct {
+	aquarium_drive_kind_t kind;
+	char* provider;
+	int rank;
+
+	uint64_t sectors;
+	uint64_t sector_size;
+
+	uint64_t size;
+
+	char* ident;
+	char* name;
+	char* label;
+} aquarium_drive_t;
 
 // function prototypes
 
@@ -57,3 +81,6 @@ int aquarium_download_template(aquarium_opts_t* opts, char const* path, char con
 int aquarium_extract_template(aquarium_opts_t* opts, char const* path, char const* name, aquarium_template_kind_t kind);
 
 int aquarium_create(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template);
+
+int aquarium_read_drives(aquarium_drive_t** drives_ref, size_t* drives_len_ref);
+void aquarium_free_drives(aquarium_drive_t* drives, size_t drives_len);

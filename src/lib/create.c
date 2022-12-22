@@ -204,10 +204,24 @@ int create_aquarium(aquarium_opts_t* opts, char const* path, char const* templat
 		goto resolv_copy_err;
 	}
 
+	// write info to aquarium database
+
+	FILE* db_fp = fopen(opts->db_path, "a");
+
+	if (!db_fp) {
+		warnx("fopen: failed to open %s for writing: %s", opts->db_path, strerror(errno));
+		goto db_open_err;
+	}
+
+	fprintf(db_fp, "%s:%s\n", abs_path, aquarium_path);
+
 	// success
 
 	rv = 0;
 
+	fclose(db_fp);
+
+db_open_err:
 resolv_copy_err:
 extract_template_err:
 

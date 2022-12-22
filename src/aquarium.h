@@ -48,6 +48,13 @@ typedef struct {
 
 	char* sanctioned_path;
 	char* db_path;
+
+	// image output & filesystem creation options
+
+	char* rootfs_label;
+	char* esp_label;
+	char* esp_oem;
+	char* esp_vol_label;
 } aquarium_opts_t;
 
 typedef struct {
@@ -76,6 +83,7 @@ aquarium_opts_t* aquarium_opts_create(void);
 void aquarium_opts_free(aquarium_opts_t* opts);
 
 bool aquarium_db_next_ent(aquarium_opts_t* opts, aquarium_db_ent_t* ent, size_t buf_len, char buf[buf_len], FILE* fp, bool be_dramatic);
+char* aquarium_db_read_pointer_file(aquarium_opts_t* opts, char const* path);
 
 int aquarium_download_template(aquarium_opts_t* opts, char const* path, char const* name, aquarium_template_kind_t kind);
 int aquarium_extract_template(aquarium_opts_t* opts, char const* path, char const* name, aquarium_template_kind_t kind);
@@ -84,3 +92,5 @@ int aquarium_create(aquarium_opts_t* opts, char const* path, char const* templat
 
 int aquarium_drives_read(aquarium_drive_t** drives_ref, size_t* drives_len_ref);
 void aquarium_drives_free(aquarium_drive_t* drives, size_t drives_len);
+
+int aquarium_img_out(aquarium_opts_t* opts, char const* path, char const* out);

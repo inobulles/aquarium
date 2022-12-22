@@ -9,6 +9,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <copyfile.h>
 
 static int ensure_struct(aquarium_opts_t* opts) {
 	int rv = -1;
@@ -196,10 +197,18 @@ int create_aquarium(aquarium_opts_t* opts, char const* path, char const* templat
 		goto extract_template_err;
 	}
 
+	// copy over /etc/resolv.conf so we don't have to use DHCP when using the host's interface
+
+	if (copyfile("/etc/resolv.conf", "etc/resolv.conf", 0, COPYFILE_ALL) < 0) {
+		warnx("copyfile: %s", strerror(errno));
+		goto resolv_copy_err;
+	}
+
 	// success
 
 	rv = 0;
 
+resolv_copy_err:
 extract_template_err:
 
 	if (setuid(uid) < 0) {

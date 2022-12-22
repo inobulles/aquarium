@@ -5,6 +5,7 @@
 #include <libgeom.h>
 #include <stdlib.h>
 #include <string.h>
+#include <mkfs_msdos.h>
 
 #define ESP_ALIGN 4096 // 4k boundary
 #define ZFS_ALIGN (1024 * 1024) // 1m boundary
@@ -145,16 +146,7 @@ err:
 	return rv;
 }
 
-static int add_esp_entry(aquarium_opts_t* opts, aquarium_drive_t* drive) {
-	// create drive geometry mesh
-
-	struct gmesh mesh;
-	struct ggeom* geom;
-
-	if (create_mesh(&mesh, &geom, drive->provider) < 0) {
-		return -1;
-	}
-
+static int add_esp_entry(aquarium_opts_t* opts, aquarium_drive_t* drive, struct ggeom* geom) {
 	uint64_t start = 40; // some sane default value if ever we can't find 'start'
 
 	struct gconfig* config;
@@ -202,11 +194,82 @@ static int add_esp_entry(aquarium_opts_t* opts, aquarium_drive_t* drive) {
 }
 
 int aquarium_format_create_esp(aquarium_opts_t* opts, aquarium_drive_t* drive, char const* path) {
-	// add entry to partition table
+	int rv = -1;
 
-	if (add_esp_entry(opts, drive) < 0) {
+	// create drive geometry mesh
+
+	struct gmesh mesh;
+	struct ggeom* geom;
+
+	if (create_mesh(&mesh, &geom, drive->provider) < 0) {
 		return -1;
 	}
 
-	return 0;
+	// add entry to partition table
+
+	if (add_esp_entry(opts, drive, geom) < 0) {
+		goto add_esp_entry_err;
+	}
+
+	// update drive geometry mesh
+
+	geom_deletetree(&mesh);
+
+	if (create_mesh(&mesh, &geom, drive->provider) < 0) {
+		return -1;
+	}
+
+	// get partition names for later
+
+	size_t part_names_len = 0;
+	char** part_names = NULL;
+
+	struct gprovider* part;
+
+	LIST_FOREACH(part, &geom->lg_provider, lg_provider) {
+		part_names = realloc(part_names, ++part_names_len * sizeof *part_names);
+		part_names[part_names_len - 1] = part->lg_name;
+	}
+
+	if (!part_names) {
+		warnx("Didn't find any partitions on %s\n", drive->provider);
+		goto part_names_err;
+	}
+
+	// create FAT32 partition for the ESP
+
+	struct msdos_options options = {
+		.OEM_string = opts->esp_oem,
+		.volume_label = opts->esp_vol_label,
+
+		.fat_type = 32,
+
+		// .create_size = esp_size * drive->sector_size,
+		.sectors_per_cluster = 1,
+	};
+
+	char esp_dev_path[256];
+	snprintf(esp_dev_path, sizeof esp_dev_path, "/dev/%s", part_names[0]);
+
+	if (mkfs_msdos(esp_dev_path, NULL, &options) < 0) {
+		fprintf(stderr, "Failed to create FAT32 filesystem in ESP\n");
+		goto mkfs_err;
+	}
+
+	rv = 0;
+
+mkfs_err:
+
+	for (size_t i = 0; i < part_names_len; i++) {
+		free(part_names[i]);
+	}
+
+	free(part_names);
+
+part_names_err:
+add_esp_entry_err:
+
+	geom_deletetree(&mesh);
+
+	return rv;
 }

@@ -56,4 +56,4 @@ bool aquarium_db_next_ent(aquarium_opts_t* opts, aquarium_db_ent_t* ent, size_t 
 int aquarium_download_template(aquarium_opts_t* opts, char const* path, char const* name, aquarium_template_kind_t kind);
 int aquarium_extract_template(aquarium_opts_t* opts, char const* path, char const* name, aquarium_template_kind_t kind);
 
-int create_aquarium(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template);
+int aquarium_create(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template);

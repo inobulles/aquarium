@@ -96,7 +96,7 @@ err:
 	return rv;
 }
 
-int create_aquarium(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template) {
+int aquarium_create(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template) {
 	int rv = -1;
 
 	// make sure aquarium structure exists

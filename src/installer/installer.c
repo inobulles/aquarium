@@ -22,7 +22,7 @@ static int do_list(void) {
 	aquarium_drive_t* drives = NULL;
 	size_t drives_len = 0;
 
-	if (aquarium_read_drives(&drives, &drives_len) < 0) {
+	if (aquarium_drives_read(&drives, &drives_len) < 0) {
 		return EXIT_FAILURE;
 	}
 

@@ -82,5 +82,5 @@ int aquarium_extract_template(aquarium_opts_t* opts, char const* path, char cons
 
 int aquarium_create(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template);
 
-int aquarium_read_drives(aquarium_drive_t** drives_ref, size_t* drives_len_ref);
-void aquarium_free_drives(aquarium_drive_t* drives, size_t drives_len);
+int aquarium_drives_read(aquarium_drive_t** drives_ref, size_t* drives_len_ref);
+void aquarium_drives_free(aquarium_drive_t* drives, size_t drives_len);

@@ -143,7 +143,7 @@ static int process_class(aquarium_drive_t** drives_ref, size_t* drives_len_ref, 
 	return 0;
 }
 
-int aquarium_read_drives(aquarium_drive_t** drives_ref, size_t* drives_len_ref) {
+int aquarium_drives_read(aquarium_drive_t** drives_ref, size_t* drives_len_ref) {
 	int rv = -1;
 
 	// get drive geometry mesh
@@ -176,7 +176,7 @@ err_gettree:
 	return rv;
 }
 
-void aquarium_free_drives(aquarium_drive_t* drives, size_t drives_len) {
+void aquarium_drives_free(aquarium_drive_t* drives, size_t drives_len) {
 	for (size_t i = 0; i < drives_len; i++) {
 		aquarium_drive_t* const drive = &drives[i];
 		free_drive(drive);

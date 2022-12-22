@@ -17,10 +17,13 @@ cc.add_opt("-Wextra")
 var lib_src = File.list("src/lib")
 	.where { |path| path.endsWith(".c") }
 
-var cmd_src = File.list("src/cmd")
+var aquarium_src = File.list("src/aquarium")
 	.where { |path| path.endsWith(".c") }
 
-var src = lib_src.toList + cmd_src.toList
+var installer_src = File.list("src/installer")
+	.where { |path| path.endsWith(".c") }
+
+var src = lib_src.toList + aquarium_src.toList + installer_src
 
 src
 	.each { |path| cc.compile(path) }
@@ -32,10 +35,13 @@ var linker = Linker.new(cc)
 linker.archive(lib_src.toList, "libaquarium.a")
 linker.link(lib_src.toList, ["archive", "copyfile", "crypto", "fetch", "geom", "jail", "mkfs_msdos", "pkg", "zfs"], "libaquarium.so", true)
 
-// create command-line frontend
-// XXX in fine, we won't need all these dependencies; they're only here while libaquarium is being worked on
+// create aquarium command-line frontend
 
-linker.link(cmd_src.toList, ["aquarium", "archive", "copyfile", "crypto", "fetch", "jail"], "aquarium")
+linker.link(aquarium_src.toList, ["aquarium", "archive", "copyfile", "crypto", "fetch", "jail"], "aquarium")
+
+// create installer command-line frontend
+
+linker.link(installer_src.toList, ["aquarium"], "installer")
 
 // copy over headers
 
@@ -62,6 +68,7 @@ class Installer {
 
 var install = {
 	"aquarium":       "%(Meta.prefix())/bin/aquarium",
+	"installer":      "%(Meta.prefix())/bin/installer",
 	"libaquarium.a":  "%(Meta.prefix())/lib/libaquarium.a",
 	"libaquarium.so": "%(Meta.prefix())/lib/libaquarium.so",
 	"aquarium.h":     "%(Meta.prefix())/include/aquarium.h",

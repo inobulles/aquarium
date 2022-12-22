@@ -143,7 +143,7 @@ static char* aquariums_path;
 static char* sanctioned_templates;
 static char* aquarium_db_path;
 
-static void __dead2 usage(void) {
+static void usage(void) {
 	fprintf(stderr,
 		"usage: %1$s [-r base]\n"
 		"       %1$s [-r base] -c path [-t template] [-k kernel_template]\n"

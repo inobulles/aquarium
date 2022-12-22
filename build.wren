@@ -35,6 +35,15 @@ class Runner {
 // for reference: chmod u+s aquarium && chown root:wheel aquarium
 // probably should be in the build stage right? or the runner won't work...
 
+class Installer {
+	static aquarium(path) {
+		File.chmod(path, File.EXTRA, File.SETUID)
+		File.chown(path, "root", "wheel")
+
+		return true
+	}
+}
+
 var install = {
 	"aquarium": "%(Meta.prefix())/bin/aquarium",
 }

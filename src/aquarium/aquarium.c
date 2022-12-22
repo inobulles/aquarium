@@ -100,7 +100,6 @@ static void usage(void) {
 	fprintf(stderr,
 		"usage: %1$s [-r base]\n"
 		"       %1$s [-r base] -c path [-t template] [-k kernel_template]\n"
-		"       %1$s [-r base] -f\n"
 		"       %1$s [-r base] -i path -o image\n"
 		"       %1$s [-r base] [-pv] -e path\n"
 		"       %1$s [-r base] -l\n"
@@ -211,77 +210,6 @@ static inline int __wait_for_process(pid_t pid) {
 }
 
 // actions
-
-static int do_struct(aquarium_opts_t* opts) {
-	// build filestructure if it doesn't yet exist for convenience
-	// also create a sanctioned templates file with some default and trusted entries
-
-	uid_t const uid = getuid();
-
-	if (setuid(0) < 0) {
-		errx(EXIT_FAILURE, "setuid(0): %s", strerror(errno));
-	}
-
-	mode_t mode = 0770; // read/write/execute for owner (root), read/write/execute for group (stoners, execute access is required to list directory)
-
-	#define SET_PERMS(path) \
-		if (stoners_gid && chown((path), 0, stoners_gid) < 0) { \
-			errx(EXIT_FAILURE, "chown(\"%s\", 0, %d): %s", (path), stoners_gid, strerror(errno)); \
-		} \
-		\
-		if (chmod((path), mode) < 0) { \
-			errx(EXIT_FAILURE, "chmod(\"%s\", 0, 0%o): %s", (path), mode, strerror(errno)); \
-		}
-
-	#define TRY_MKDIR(path) \
-		if (mkdir((path), mode) < 0 && errno != EEXIST) { \
-			errx(EXIT_FAILURE, "mkdir(\"%s\", 0%o): %s", (path), mode, strerror(errno)); \
-		} \
-		\
-		SET_PERMS((path))
-
-	TRY_MKDIR(base_path)
-
-	TRY_MKDIR(templates_path)
-	TRY_MKDIR(kernels_path)
-	TRY_MKDIR(aquariums_path)
-
-	if (access(sanctioned_templates, R_OK) < 0) {
-		FILE* fp = fopen(sanctioned_templates, "wx");
-
-		if (!fp) {
-			errx(EXIT_FAILURE, "fopen(\"%s\"): %s", sanctioned_templates, strerror(errno));
-		}
-
-		fprintf(fp, "b:amd64.ubuntu.focal:https:github.com/inobulles/bob-linux-images/releases/download/amd64.ubuntu.focal/amd64.ubuntu.focal.txz:123438644:e1236bcc6a755a0db1d0fa34d4f6a942a56a51778a52d344c3d8c9c4f3b13682\n");
-		fprintf(fp, "b:amd64.aquabsd.0622a:https:github.com/inobulles/aquabsd-core/releases/download/v0622a-beta/base.txz:100050160:60321fefa8d46642f82fb51f9a1f16c552768da3f2b65b41ffa5fbaf8ff621fe\n");
-		fprintf(fp, "k:amd64.aquabsd.0622a:https:github.com/inobulles/aquabsd-core/releases/download/v0622a-beta/kernel.txz:46796444:da71214c6c6ed3de41599c2cef56c5215ec0c547eb839a49669e78598839a000\n");
-		fprintf(fp, "b:amd64.aquabsd.0922a:https:github.com/inobulles/aquabsd-core/releases/download/v0922a-beta/base.txz:100190248:7c6ddff808a8e3209917dd8beda46101a923b0b0386c2a1aef2bcba61a0406a0\n");
-		fprintf(fp, "k:amd64.aquabsd.0922a:https:github.com/inobulles/aquabsd-core/releases/download/v0922a-beta/kernel.txz:47538612:ad44de7c4d071db1862aadbbaf72be0551d736a89dbb9ad005cd0f95365b79b4\n");
-
-		fclose(fp);
-	}
-
-	SET_PERMS(sanctioned_templates)
-
-	if (access(aquarium_db_path, R_OK) < 0) {
-		int fd = creat(aquarium_db_path, mode);
-
-		if (!fd) {
-			errx(EXIT_FAILURE, "creat(\"%s\", 0%o): %s", aquarium_db_path, mode, strerror(errno));
-		}
-
-		close(fd);
-	}
-
-	SET_PERMS(aquarium_db_path)
-
-	if (setuid(uid) < 0) {
-		errx(EXIT_FAILURE, "setuid(%d): %s", uid, strerror(errno));
-	}
-
-	return EXIT_SUCCESS;
-}
 
 static int do_list(aquarium_opts_t* opts) {
 	FILE* fp = fopen(aquarium_db_path, "r");
@@ -1761,10 +1689,6 @@ int main(int argc, char* argv[]) {
 		else if (c == 'e') {
 			action = do_enter;
 			path = optarg;
-		}
-
-		else if (c == 'f') {
-			action = do_struct;
 		}
 
 		else if (c == 'i') {

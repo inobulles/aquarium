@@ -38,6 +38,27 @@ static int do_install(void) {
 		usage();
 	}
 
+	// find our drive
+
+	aquarium_drive_t* drives = NULL;
+	size_t drives_len = 0;
+
+	if (aquarium_drives_read(&drives, &drives_len) < 0) {
+		return EXIT_FAILURE;
+	}
+
+	aquarium_drive_t* const drive = aquarium_drives_find(drives, drives_len, target);
+
+	if (!drive) {
+		return EXIT_FAILURE;
+	}
+
+	// create partition table on target
+
+	if (aquarium_format_new_table(drive) < 0) {
+		return EXIT_FAILURE;
+	}
+
 	// create filesystem on target
 
 	// TODO download & extract template to target

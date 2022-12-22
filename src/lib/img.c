@@ -8,6 +8,37 @@
 #include <string.h>
 #include <unistd.h>
 
+#define ENTROPY_BYTES 4096
+
+static int update_fstab(aquarium_opts_t* opts, char const* _path) {
+	int rv = -1;
+
+	char* path;
+	if (asprintf(&path, "%s/etc/fstab", _path)) {}
+
+	FILE* fp = fopen(path, "w");
+
+	if (!fp) {
+		warnx("fopen(\"%s\"): %s", path, strerror(errno));
+		goto err;
+	}
+
+	fprintf(fp, "/dev/gpt/%s / ufs ro,noatime 1 1\n", opts->rootfs_label);
+	fprintf(fp, "/dev/gpt/%s /boot/efi msdosfs ro,noatime 0 0\n", opts->esp_label);
+
+	fclose(fp);
+
+	// success
+
+	rv = 0;
+
+err:
+
+	free(path);
+
+	return rv;
+}
+
 int aquarium_img_out(aquarium_opts_t* opts, char const* _path, char const* out) {
 	char* const path = aquarium_db_read_pointer_file(opts, _path);
 
@@ -17,6 +48,12 @@ int aquarium_img_out(aquarium_opts_t* opts, char const* _path, char const* out) 
 
 	// TODO make sure aquarium is unmounted, once I've implemented all the entering stuff
 	// TODO check the OS is actually supported
+
+	// add necessary entries to fstab
+
+	if (update_fstab(opts, path) < 0) {
+		return -1;
+	}
 
 	return 0;
 }

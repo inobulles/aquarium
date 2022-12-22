@@ -96,7 +96,7 @@ random_open_err:
 	return rv;
 }
 
-static int populate_esp(char const* stage, char const* path) {
+int aquarium_img_populate_esp(char const* path, char const* stage) {
 	int rv = -1;
 
 	// create EFI directory structure
@@ -187,7 +187,7 @@ static int create_esp(aquarium_opts_t* opts, char const* path) {
 
 	// populate ESP
 
-	if (populate_esp(stage, path) < 0) {
+	if (aquarium_img_populate_esp(path, stage) < 0) {
 		goto populate_err;
 	}
 
@@ -262,6 +262,8 @@ int aquarium_img_out(aquarium_opts_t* opts, char const* _path, char const* out) 
 	if (create_esp(opts, path) < 0) {
 		return -1;
 	}
+
+	// TODO
 
 	(void) out;
 

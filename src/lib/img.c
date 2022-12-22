@@ -39,6 +39,61 @@ err:
 	return rv;
 }
 
+static int gen_entropy(char const* _path) {
+	int rv = 0;
+
+	// open random device
+
+	int random_fd = open("/dev/random", O_RDONLY);
+
+	if (random_fd < 0) {
+		warnx("open(\"/dev/random\"): %s", strerror(errno));
+		goto random_open_err;
+	}
+
+	// open entropy file
+
+	char* path;
+	asprintf(&path, "%s/boot/entropy", _path);
+
+	int fd = open(path, O_CREAT | O_WRONLY, 0600 /* read/write by owner (root) */);
+
+	if (fd < 0) {
+		warnx("open(\"%s\"): %s", path, strerror(errno));
+		goto entropy_open_err;
+	}
+
+	uint8_t entropy[ENTROPY_BYTES];
+
+	if (read(random_fd, entropy, sizeof entropy) != sizeof entropy) {
+		warnx("read: %s", strerror(errno));
+		goto read_err;
+	}
+
+	if (write(fd, entropy, sizeof entropy) != sizeof entropy) {
+		warnx("write: %s", strerror(errno));
+		goto write_err;
+	}
+
+	// success
+
+	rv = 0;
+
+write_err:
+read_err:
+
+	close(fd);
+
+entropy_open_err:
+
+	close(random_fd);
+	free(path);
+
+random_open_err:
+
+	return rv;
+}
+
 int aquarium_img_out(aquarium_opts_t* opts, char const* _path, char const* out) {
 	char* const path = aquarium_db_read_pointer_file(opts, _path);
 
@@ -52,6 +107,12 @@ int aquarium_img_out(aquarium_opts_t* opts, char const* _path, char const* out) 
 	// add necessary entries to fstab
 
 	if (update_fstab(opts, path) < 0) {
+		return -1;
+	}
+
+	// generate entropy
+
+	if (gen_entropy(path) < 0) {
 		return -1;
 	}
 

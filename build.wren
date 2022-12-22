@@ -1,8 +1,7 @@
 // install dependencies
-// TODO libmkfs_msdos doesn't actually exist at the moment
 
 Deps.git_inherit("https://github.com/inobulles/libcopyfile")
-// Deps.git_inherit("https://github.com/inobulles/libmkfs_msdos")
+Deps.git_inherit("https://github.com/inobulles/libmkfs_msdos")
 
 // C compilation
 

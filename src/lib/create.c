@@ -96,6 +96,17 @@ err:
 	return rv;
 }
 
+static int config(void) {
+	// copy over /etc/resolv.conf so we don't have to use DHCP when using the host's interface
+
+	if (copyfile("/etc/resolv.conf", "etc/resolv.conf", 0, COPYFILE_ALL) < 0) {
+		warnx("copyfile: %s", strerror(errno));
+		return -1;
+	}
+
+	return 0;
+}
+
 int aquarium_create(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template) {
 	int rv = -1;
 
@@ -197,13 +208,6 @@ int aquarium_create(aquarium_opts_t* opts, char const* path, char const* templat
 		goto extract_template_err;
 	}
 
-	// copy over /etc/resolv.conf so we don't have to use DHCP when using the host's interface
-
-	if (copyfile("/etc/resolv.conf", "etc/resolv.conf", 0, COPYFILE_ALL) < 0) {
-		warnx("copyfile: %s", strerror(errno));
-		goto resolv_copy_err;
-	}
-
 	// write info to aquarium database
 
 	FILE* const db_fp = fopen(opts->db_path, "a");
@@ -214,6 +218,12 @@ int aquarium_create(aquarium_opts_t* opts, char const* path, char const* templat
 	}
 
 	fprintf(db_fp, "%s:%s\n", abs_path, aquarium_path);
+
+	// configure the newly created aquarium
+
+	if (config() < 0) {
+		goto config_err;
+	}
 
 	// finish writing pointer file as user
 
@@ -245,11 +255,11 @@ int aquarium_create(aquarium_opts_t* opts, char const* path, char const* templat
 
 pointer_open_err:
 setuid_user_err:
+config_err:
 
 	fclose(db_fp);
 
 db_open_err:
-resolv_copy_err:
 extract_template_err:
 
 	if (setuid(uid) < 0) {

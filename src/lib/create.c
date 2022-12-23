@@ -361,6 +361,11 @@ int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const*
 
 	fclose(pointer_fp);
 
+	if (chown(pointer_path, uid, opts->stoners_gid) < 0) {
+		warnx("chown(\"%s\", %d, %d\"): %s", pointer_path, uid, opts->stoners_gid, strerror(errno));
+		rv = -1;
+	}
+
 pointer_open_err:
 setuid_user_err:
 config_err:

@@ -89,6 +89,8 @@ char* aquarium_db_read_pointer_file(aquarium_opts_t* opts, char const* path);
 int aquarium_download_template(aquarium_opts_t* opts, char const* path, char const* name, aquarium_template_kind_t kind);
 int aquarium_extract_template(aquarium_opts_t* opts, char const* path, char const* name, aquarium_template_kind_t kind);
 
+aquarium_os_info_t aquarium_os_info(char const* path);
+
 int aquarium_create(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template);
 
 int aquarium_enter(aquarium_opts_t* opts, char const* path);

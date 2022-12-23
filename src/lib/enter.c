@@ -464,6 +464,8 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 			hostname = (void*) path;
 		}
 
+		hostname++;
+
 		JAILPARAM("name", hash)
 		JAILPARAM("path", path)
 		JAILPARAM("host.hostname", hostname)

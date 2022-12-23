@@ -361,7 +361,10 @@ int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const*
 
 	fclose(pointer_fp);
 
-	if (chown(pointer_path, uid, opts->stoners_gid) < 0) {
+	// try set ownership of pointer file to the user who's UID is the current real UID
+	// we don't want to do this if the real UID is root (0), so check 'opts->stoners_gid' (which is 0 when root)
+
+	if (opts->stoners_gid && chown(pointer_path, uid, opts->stoners_gid) < 0) {
 		warnx("chown(\"%s\", %d, %d\"): %s", pointer_path, uid, opts->stoners_gid, strerror(errno));
 		rv = -1;
 	}

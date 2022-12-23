@@ -472,7 +472,7 @@ static int create_zfs_dataset(libzfs_handle_t* handle, char const* pool, char co
 	// create dataset itself
 
 	char* name;
-	assert(!asprintf(&name, "%s/%s", pool, dataset));
+	assert(asprintf(&name, "%s/%s", pool, dataset));
 
 	if (zfs_create(handle, name, ZFS_TYPE_DATASET, props) < 0) {
 		warnx("zfs_create(\"%s\")", name);
@@ -535,7 +535,7 @@ props_alloc_err:
 	return rv;
 }
 
-int aquarium_format_create_zfs(aquarium_opts_t* opts, aquarium_drive_t* drive, char const* path) {
+int aquarium_format_create_zfs(aquarium_opts_t* opts, aquarium_drive_t* drive, char const* mountpoint) {
 	int rv = -1;
 
 	// ZFS should be the second partition
@@ -558,9 +558,6 @@ int aquarium_format_create_zfs(aquarium_opts_t* opts, aquarium_drive_t* drive, c
 	libzfs_print_on_error(handle, true);
 
 	// create ZFS pool
-
-	char* mountpoint;
-	assert(!asprintf(&mountpoint, "%s/mnt", path));
 
 	char* const pool = opts->rootfs_label;
 	zpool_handle_t* const pool_handle = create_zfs_pool(handle, pool, name, mountpoint);
@@ -600,7 +597,7 @@ int aquarium_format_create_zfs(aquarium_opts_t* opts, aquarium_drive_t* drive, c
 	// finally, set our active boot environment to the current one
 
 	char* benv;
-	assert(!asprintf(&benv, "%s/" BE_ROOT_NAME "/" BE_DEFAULT, pool));
+	assert(asprintf(&benv, "%s/" BE_ROOT_NAME "/" BE_DEFAULT, pool));
 
 	if (zpool_set_prop(pool_handle, "bootfs", benv) < 0) {
 		goto set_bootfs_err;

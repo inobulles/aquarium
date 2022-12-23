@@ -145,6 +145,12 @@ static int do_install(aquarium_opts_t* opts) {
 		return EXIT_FAILURE;
 	}
 
+	// create ZFS filesystem on target
+
+	if (aquarium_format_create_zfs(opts, drive, "/mnt") < 0) {
+		return EXIT_FAILURE;
+	}
+
 	return EXIT_SUCCESS;
 }
 

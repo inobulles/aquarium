@@ -501,234 +501,41 @@ static int do_create(aquarium_opts_t* opts) {
 //  - link (or bind mount) necessary directories (/dev, /tmp if specified, &c)
 //  - actually enter the aquarium
 
+static int enter_cb(__attribute__((unused)) void* param) {
+	pid_t pid = fork();
+
+	if (pid < 0) {
+		warnx("fork: %s", strerror(errno));
+		return -1;
+	}
+
+	if (!pid) {
+		// unfortunately we kinda need to use execlp here
+		// different OS' may have different locations for the 'env' binary
+		// we use it instead of starting the shell directly to clear any environment variables that we shouldn't have access to (and which anyway isn't super relevant to us)
+
+		execlp("env", "env", "-i", "sh", NULL);
+		_exit(EXIT_FAILURE);
+	}
+
+	int const child_rv = __aquarium_wait_for_process(pid);
+
+	if (child_rv != EXIT_SUCCESS) {
+		warnx("Child process exited with error code %d", child_rv);
+		return -1;
+	}
+
+	return 0;
+}
+
 static int do_enter(aquarium_opts_t* opts) {
 	char* aquarium_path = aquarium_db_read_pointer_file(opts, path);
 
-	// change into the aquarium directory
-
-	if (chdir(aquarium_path) < 0) {
-		errx(EXIT_FAILURE, "chdir: %s", strerror(errno));
+	if (aquarium_enter(opts, aquarium_path, enter_cb, NULL) < 0) {
+		return -1;
 	}
 
-	// setuid root
-
-	if (setuid(0) < 0) {
-		errx(EXIT_FAILURE, "setuid(0): %s", strerror(errno));
-	}
-
-	// mount devfs filesystem
-
-	struct iovec iov_dev[] = {
-		IOV("fstype", "devfs"),
-		IOV("fspath", "dev"),
-	};
-
-	if (nmount(iov_dev, sizeof(iov_dev) / sizeof(*iov_dev), 0) < 0) {
-		errx(EXIT_FAILURE, "nmount: failed to mount devfs: %s", strerror(errno));
-	}
-
-	// set the correct ruleset for devfs
-	// we necessarily need to start by hiding everything for some reason
-
-	int devfs_fd = open("dev", O_RDONLY);
-
-	if (devfs_fd < 0) {
-		errx(EXIT_FAILURE, "open(\"dev\"): %s", strerror(errno));
-	}
-
-	devfs_rsnum ruleset = 1; // devfsrules_hide_all
-
-	if (ioctl(devfs_fd, DEVFSIO_SAPPLY, &ruleset) < 0) {
-		errx(EXIT_FAILURE, "DEVFSIO_SAPPLY: %s", strerror(errno));
-	}
-
-	ruleset = 2; // devfsrules_unhide_basic
-
-	if (ioctl(devfs_fd, DEVFSIO_SAPPLY, &ruleset) < 0) {
-		errx(EXIT_FAILURE, "DEVFSIO_SAPPLY: %s", strerror(errno));
-	}
-
-	ruleset = 3; // devfsrules_unhide_login
-
-	if (ioctl(devfs_fd, DEVFSIO_SAPPLY, &ruleset) < 0) {
-		errx(EXIT_FAILURE, "DEVFSIO_SAPPLY: %s", strerror(errno));
-	}
-
-	ruleset = 5; // devfsrules_jail_vnet
-
-	if (ioctl(devfs_fd, DEVFSIO_SAPPLY, &ruleset) < 0) {
-		errx(EXIT_FAILURE, "DEVFSIO_SAPPLY: %s", strerror(errno));
-	}
-
-	close(devfs_fd);
-
-	// mount tmpfs filesystem for /tmp
-	// we don't wanna overwrite anything potentially already inside of /tmp
-	// to do that, the manual (nmount(2)) suggests we use the MNT_EMPTYDIR flag
-	// there seem to be a few inconsistencies vis-à-vis the type of 'flags', so instead we can simply use the 'emptydir' iov (as can be seen in '/usr/include/sys/mount.h')
-
-	struct iovec iov_tmp[] = {
-		IOV("fstype", "tmpfs"),
-		IOV("fspath", "tmp"),
-		IOV("emptydir", ""),
-	};
-
-	if (nmount(iov_tmp, sizeof(iov_tmp) / sizeof(*iov_tmp), 0) < 0 && errno != ENOTEMPTY) {
-		errx(EXIT_FAILURE, "nmount: failed to mount nullfs for /tmp: %s", strerror(errno));
-	}
-
-	// OS-specific actions
-	// treat OS_GENERIC OS' as the default (i.e. like their host OS)
-
-	os_info_t os = __retrieve_os_info(NULL);
-
-	if (os == OS_LINUX) {
-		load_linux64_kmod();
-
-		// mount /dev/shm as tmpfs
-		// on linux, this needs to have mode 1777
-		// ignore ENOENT, because we may be prevented from mounting by the devfs ruleset
-
-		struct iovec iov_shm[] = {
-			IOV("fstype", "tmpfs"),
-			IOV("fspath", "dev/shm"),
-			IOV("mode", "1777"),
-		};
-
-		if (nmount(iov_shm, sizeof(iov_shm) / sizeof(*iov_shm), 0) < 0 && errno != ENOENT) {
-			errx(EXIT_FAILURE, "nmount: failed to mount shm tmpfs: %s", strerror(errno));
-		}
-
-		// mount fdescfs (with linrdlnk)
-		// ignore ENOENT, because we may be prevented from mounting by the devfs ruleset
-
-		struct iovec iov_fd[] = {
-			IOV("fstype", "fdescfs"),
-			IOV("fspath", "dev/fd"),
-			IOV("linrdlnk", ""),
-		};
-
-		if (nmount(iov_fd, sizeof(iov_fd) / sizeof(*iov_fd), 0) < 0 && errno != ENOENT) {
-			errx(EXIT_FAILURE, "nmount: failed to mount fdescfs: %s", strerror(errno));
-		}
-
-		// mount linprocfs
-
-		struct iovec iov_proc[] = {
-			IOV("fstype", "linprocfs"),
-			IOV("fspath", "proc"),
-		};
-
-		if (nmount(iov_proc, sizeof(iov_proc) / sizeof(*iov_proc), 0) < 0) {
-			errx(EXIT_FAILURE, "nmount: failed to mount linprocfs: %s", strerror(errno));
-		}
-
-		// mount linsysfs
-
-		struct iovec iov_sys[] = {
-			IOV("fstype", "linsysfs"),
-			IOV("fspath", "sys"),
-		};
-
-		if (nmount(iov_sys, sizeof(iov_sys) / sizeof(*iov_sys), 0) < 0) {
-			errx(EXIT_FAILURE, "nmount: failed to mount linsysfs: %s", strerror(errno));
-		}
-	}
-
-	else {
-		// mount fdescfs
-		// ignore ENOENT, because we may be prevented from mounting by the devfs ruleset
-
-		struct iovec iov_fd[] = {
-			IOV("fstype", "fdescfs"),
-			IOV("fspath", "dev/fd"),
-		};
-
-		if (nmount(iov_fd, sizeof(iov_fd) / sizeof(*iov_fd), 0) < 0 && errno != ENOENT) {
-			errx(EXIT_FAILURE, "nmount: failed to mount fdescfs: %s", strerror(errno));
-		}
-
-		// mount procfs
-
-		struct iovec iov_proc[] = {
-			IOV("fstype", "procfs"),
-			IOV("fspath", "proc"),
-		};
-
-		if (nmount(iov_proc, sizeof(iov_proc) / sizeof(*iov_proc), 0) < 0) {
-			errx(EXIT_FAILURE, "nmount: failed to mount procfs: %s", strerror(errno));
-		}
-	}
-
-	// actually enter aquarium
-	// PROC_NO_NEW_PRIVS_ENABLE is only available in aquaBSD and FreeBSD-CURRENT: https://reviews.freebsd.org/D30939
-
-#if __FreeBSD_version >= 1400026
-	int flag = PROC_NO_NEW_PRIVS_ENABLE;
-
-	if (procctl(P_PID, getpid(), PROC_NO_NEW_PRIVS_CTL, &flag) < 0) {
-		errx(EXIT_FAILURE, "procctl: %s", strerror(errno));
-	}
-#endif
-
-	char* hash = __hash(aquarium_path); // don't care about freeing
-	int jid = jail_getid(hash);
-
-	if (jid >= 0) {
-		if (jail_attach(jid) < 0) {
-			errx(EXIT_FAILURE, "jail_attach: %s", strerror(errno));
-		}
-
-		goto shell;
-	}
-
-	char* hostname = strrchr(path, '/');
-
-	if (!hostname) {
-		hostname = path;
-	}
-
-	struct jailparam args[16] = { 0 };
-	size_t args_len = 0;
-
-	JAILPARAM("name", __hash(aquarium_path))
-	JAILPARAM("path", aquarium_path)
-	JAILPARAM("host.hostname", hostname)
-	JAILPARAM("allow.mount", "false")
-	JAILPARAM("allow.mount.devfs", "false")
-	JAILPARAM("allow.raw_sockets", "true") // allow for sending ICMP packets (for ping)
-	JAILPARAM("allow.socket_af", "true")
-
-	if (!vnet_disable) {
-		JAILPARAM("vnet", NULL)
-	}
-
-	else {
-		JAILPARAM("ip4", "inherit")
-		JAILPARAM("ip6", "inherit")
-	}
-
-	if (persist) {
-		JAILPARAM("persist", NULL)
-	}
-
-	if (jailparam_set(args, args_len, JAIL_CREATE | JAIL_ATTACH) < 0) {
-		errx(EXIT_FAILURE, "jailparam_set: %s (%s)", strerror(errno), jail_errmsg);
-	}
-
-	jailparam_free(args, args_len);
-
-shell:
-
-	if (persist) {
-		return EXIT_SUCCESS;
-	}
-
-	// unfortunately we kinda need to use execlp here
-	// different OS' may have different locations for the 'env' binary
-	// we use it instead of starting the shell directly to clear any environment variables that we shouldn't have access to (and which anyway isn't super relevant to us)
-
-	return execlp("env", "env", "-i", "sh", NULL);
+	return 0;
 }
 
 // sweeping aquariums (takes in nothing):

@@ -147,7 +147,19 @@ static int do_install(aquarium_opts_t* opts) {
 
 	// create ZFS filesystem on target
 
-	if (aquarium_format_create_zfs(opts, drive, "/mnt") < 0) {
+	char const* const mountpoint = "/mnt";
+
+	if (aquarium_format_create_zfs(opts, drive, mountpoint) < 0) {
+		return EXIT_FAILURE;
+	}
+
+	// extract templates
+
+	if (template && aquarium_extract_template(opts, mountpoint, template, AQUARIUM_TEMPLATE_KIND_BASE) < 0) {
+		return EXIT_FAILURE;
+	}
+
+	if (kernel_template && aquarium_extract_template(opts, mountpoint, kernel_template, AQUARIUM_TEMPLATE_KIND_KERNEL) < 0) {
 		return EXIT_FAILURE;
 	}
 

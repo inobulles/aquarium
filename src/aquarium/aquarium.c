@@ -85,9 +85,6 @@ static char* kernel_template = NULL;
 static char* out_path = NULL;
 static char* path = NULL;
 
-static bool persist = false;
-static bool vnet_disable = false;
-
 static void usage(void) {
 	fprintf(stderr,
 		"usage: %1$s [-r base]\n"
@@ -663,7 +660,7 @@ int main(int argc, char* argv[]) {
 		// general options
 
 		if (c == 'p') {
-			persist = true;
+			opts->persist = true;
 		}
 
 		else if (c == 'r') {
@@ -671,7 +668,7 @@ int main(int argc, char* argv[]) {
 		}
 
 		else if (c == 'v') {
-			vnet_disable = true;
+			opts->vnet_disable = true;
 		}
 
 		// action options

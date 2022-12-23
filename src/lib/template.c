@@ -25,7 +25,7 @@ typedef struct {
 	char* sha256;
 } sanctioned_t;
 
-static int fetch_template(sanctioned_t* sanctioned, char* path, SHA256_CTX* sha_context, size_t* total_ref) {
+static int fetch_template(sanctioned_t* sanctioned, char const* path, SHA256_CTX* sha_context, size_t* total_ref) {
 	// actually fetch the template
 	// it's initially downloaded with a '.' prefix, because otherwise, there's a potential for a race condition
 	// e.g., if we downloaded it in its final destination, the template could be malicious, and an actor could coerce the user into creating an aquarium from that template before the checks have terminated
@@ -95,7 +95,7 @@ out_open_err:
 	return rv;
 }
 
-static int check_template(sanctioned_t* sanctioned, char* path, size_t total, SHA256_CTX* sha_context) {
+static int check_template(sanctioned_t* sanctioned, char const* path, size_t total, SHA256_CTX* sha_context) {
 	// get digest of hash
 
 	uint8_t hash[SHA256_DIGEST_LENGTH];

@@ -325,13 +325,7 @@ static int create_img(aquarium_opts_t* opts, char const* path, char const* out) 
 	return 0;
 }
 
-int aquarium_img_out(aquarium_opts_t* opts, char const* _path, char const* out) {
-	char* const path = aquarium_db_read_pointer_file(opts, _path);
-
-	if (!path) {
-		return -1;
-	}
-
+int aquarium_img_out(aquarium_opts_t* opts, char const* path, char const* out) {
 	// TODO make sure aquarium is unmounted, once I've implemented all the entering stuff
 	// TODO check the OS is actually supported
 

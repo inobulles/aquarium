@@ -107,7 +107,7 @@ static int config(void) {
 	return 0;
 }
 
-int aquarium_create(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template) {
+int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const* template, char const* kernel_template) {
 	int rv = -1;
 
 	// make sure aquarium structure exists
@@ -133,14 +133,14 @@ int aquarium_create(aquarium_opts_t* opts, char const* path, char const* templat
 
 	// generate final aquarium path
 
-	char* _aquarium_path;
-	if (asprintf(&_aquarium_path, "%s%s-XXXXXXX", opts->aquariums_path, template)) {}
+	char* _path;
+	if (asprintf(&_path, "%s%s-XXXXXXX", opts->aquariums_path, template)) {}
 
-	char* const aquarium_path = mkdtemp(_aquarium_path);
-	free(_aquarium_path);
+	char* const path = mkdtemp(_path);
+	free(_path);
 
-	if (!aquarium_path) {
-		warnx("mkdtemp(\"%s\"): failed to create aquarium directory: %s", _aquarium_path, strerror(errno));
+	if (!path) {
+		warnx("mkdtemp(\"%s\"): failed to create aquarium directory: %s", _path, strerror(errno));
 		goto mkdtemp_err;
 	}
 
@@ -150,25 +150,25 @@ int aquarium_create(aquarium_opts_t* opts, char const* path, char const* templat
 	// to be honest, I think it's a mistake not to have included a proper way of checking path hierarchy in POSIX
 	// TODO haven't yet thought about how safe this'd be, but since the aquarium database also contains what the pointer file was supposed to point to, maybe it could be cool for this to automatically regenerate the pointer file instead of erroring?
 
-	if (!access(path, F_OK)) {
-		warnx("Pointer file %s already exists", path);
+	if (!access(pointer_path, F_OK)) {
+		warnx("Pointer file %s already exists", pointer_path);
 		goto pointer_file_exists_err;
 	}
 
-	int const fd = creat(path, 0 /* don't care about mode */);
+	int const fd = creat(pointer_path, 0 /* don't care about mode */);
 
 	if (!fd) {
-		warnx("creat(\"%s\"): %s", path, strerror(errno));
+		warnx("creat(\"%s\"): %s", pointer_path, strerror(errno));
 		goto creat_err;
 	}
 
-	char* const abs_path = realpath(path, NULL);
+	char* const abs_path = realpath(pointer_path, NULL);
 
 	close(fd);
-	remove(path);
+	remove(pointer_path);
 
 	if (!abs_path) {
-		warnx("realpath(\"%s\"): %s", path, strerror(errno));
+		warnx("realpath(\"%s\"): %s", pointer_path, strerror(errno));
 		goto abs_path_err;
 	}
 
@@ -200,11 +200,11 @@ int aquarium_create(aquarium_opts_t* opts, char const* path, char const* templat
 
 	// extract templates
 
-	if (template && aquarium_extract_template(opts, aquarium_path, template, AQUARIUM_TEMPLATE_KIND_BASE) < 0) {
+	if (template && aquarium_extract_template(opts, path, template, AQUARIUM_TEMPLATE_KIND_BASE) < 0) {
 		goto extract_template_err;
 	}
 
-	if (kernel_template && aquarium_extract_template(opts, aquarium_path, kernel_template, AQUARIUM_TEMPLATE_KIND_KERNEL) < 0) {
+	if (kernel_template && aquarium_extract_template(opts, path, kernel_template, AQUARIUM_TEMPLATE_KIND_KERNEL) < 0) {
 		goto extract_template_err;
 	}
 
@@ -217,7 +217,7 @@ int aquarium_create(aquarium_opts_t* opts, char const* path, char const* templat
 		goto db_open_err;
 	}
 
-	fprintf(db_fp, "%s:%s\n", abs_path, aquarium_path);
+	fprintf(db_fp, "%s:%s\n", abs_path, path);
 
 	// configure the newly created aquarium
 
@@ -238,14 +238,14 @@ int aquarium_create(aquarium_opts_t* opts, char const* path, char const* templat
 		warnx("chdir(\"%s\"): %s", cwd, strerror(errno));
 	}
 
-	FILE* pointer_fp = fopen(path, "wx");
+	FILE* pointer_fp = fopen(pointer_path, "wx");
 
 	if (!pointer_fp) {
-		warnx("fopen: failed to open %s for writing: %s", path, strerror(errno));
+		warnx("fopen: failed to open %s for writing: %s", pointer_path, strerror(errno));
 		goto pointer_open_err;
 	}
 
-	fprintf(pointer_fp, "%s", aquarium_path);
+	fprintf(pointer_fp, "%s", path);
 
 	// success
 
@@ -280,7 +280,7 @@ abs_path_err:
 creat_err:
 pointer_file_exists_err:
 
-	free(aquarium_path);
+	free(path);
 
 mkdtemp_err:
 

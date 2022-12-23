@@ -89,8 +89,8 @@ static int ensure_struct(aquarium_opts_t* opts) {
 
 err:
 
-	if (setuid(uid) < 0) {
-		warnx("setuid(%d): %s", uid, strerror(errno));
+	if (setreuid(uid, 0) < 0) {
+		warnx("setreuid(%d): %s", uid, strerror(errno));
 		rv = -1;
 	}
 
@@ -352,8 +352,8 @@ int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const*
 
 	// finish writing pointer file as user
 
-	if (setuid(uid) < 0) {
-		warnx("setuid(%d): %s", uid, strerror(errno));
+	if (setreuid(uid, 0) < 0) {
+		warnx("setreuid(%d, 0): %s", uid, strerror(errno));
 		goto setuid_user_err;
 	}
 
@@ -387,8 +387,8 @@ config_err:
 db_open_err:
 extract_template_err:
 
-	if (setuid(uid) < 0) {
-		warnx("setuid(%d): %s", uid, strerror(errno));
+	if (setreuid(uid, 0) < 0) {
+		warnx("setreuid(%d, 0): %s", uid, strerror(errno));
 		rv = -1;
 	}
 

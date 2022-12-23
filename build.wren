@@ -62,12 +62,12 @@ class Installer {
 		File.chmod(path, File.EXTRA, File.SETUID)
 		File.chown(path, "root", "wheel")
 
-		return true
+		return "%(Meta.prefix())/bin/aquarium"
 	}
 }
 
 var install = {
-	"aquarium":       "%(Meta.prefix())/bin/aquarium",
+	"aquarium":       ":aquarium",
 	"installer":      "%(Meta.prefix())/bin/installer",
 	"libaquarium.a":  "%(Meta.prefix())/lib/libaquarium.a",
 	"libaquarium.so": "%(Meta.prefix())/lib/libaquarium.so",

@@ -476,8 +476,8 @@ mount_devfs_err:
 
 mount_tmpfs_err:
 
-	if (setuid(uid) < 0) {
-		warnx("setuid(%d): %s", uid, strerror(errno));
+	if (setreuid(uid, 0) < 0) {
+		warnx("setreuid(%d, 0): %s", uid, strerror(errno));
 		rv = -1;
 	}
 

@@ -42,7 +42,7 @@ int aquarium_sweep(aquarium_opts_t* opts) {
 
 	// go through aquarium database
 
-	FILE* const fp = fopen(opts->db_path, "rw");
+	FILE* const fp = fopen(opts->db_path, "w+");
 
 	if (!fp) {
 		warnx("fopen(\"%s\"): %s", opts->db_path, strerror(errno));

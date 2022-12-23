@@ -336,6 +336,7 @@ int aquarium_img_out(aquarium_opts_t* opts, char const* path, char const* out) {
 	}
 
 	// make sure everything is unmounted
+	// this will (hopefully) fail if the aquarium is running (i.e. using the filesystems)
 
 	if (aquarium_enter_setdown(path, os) < 0) {
 		return -1;

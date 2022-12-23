@@ -103,56 +103,6 @@ static void usage(void) {
 	exit(EXIT_FAILURE);
 }
 
-// utility functions
-
-typedef enum {
-	OS_GENERIC,
-	OS_FBSD,
-	OS_LINUX,
-} os_info_t;
-
-static inline os_info_t __retrieve_os_info(const char* aquarium_path) {
-	// this method of retrieving OS info relies on the existence of an '/etc/os-release' file on the installation
-	// all officially supported OS' for aquariums should have this file, else they'll simply be reported as 'OS_GENERIC'
-	// if 'aquarium_path == NULL', assume we're already in the aquarium, and just use the relative path for '/etc/os-release'
-
-	char* path = "etc/os-release";
-
-	if (aquarium_path) {
-		asprintf(&path, "%s/etc/os-release", aquarium_path);
-	}
-
-	FILE* fp = fopen(path, "r");
-
-	if (aquarium_path) {
-		free(path);
-	}
-
-	if (!fp) {
-		return OS_GENERIC;
-	}
-
-	char buf[1024];
-	char* os = fgets(buf, sizeof buf, fp);
-
-	os += strlen("NAME=\"");
-	os[strlen(os) - 2] = '\0';
-
-	fclose(fp);
-
-	// match NAME with an OS we know of
-
-	if (!strcmp(os, "FreeBSD")) {
-		return OS_FBSD;
-	}
-
-	if (!strcmp(os, "Ubuntu")) {
-		return OS_LINUX;
-	}
-
-	return OS_GENERIC;
-}
-
 // actions
 
 static int do_list(aquarium_opts_t* opts) {
@@ -639,22 +589,7 @@ static int do_img_out(aquarium_opts_t* opts) {
 	}
 
 	char* const aquarium_path = aquarium_db_read_pointer_file(opts, path);
-
-	// check the OS is actually supported
-
-	os_info_t os = __retrieve_os_info(aquarium_path);
-
-	if (os != OS_FBSD) {
-		errx(EXIT_FAILURE, "Aquarium OS is unsupported (%d, only FreeBSD aquariums are currently supported)", os);
-	}
-
-	// make sure all filesystems are unmounted
-
-	__unmount_aquarium(aquarium_path);
-
-	// finally, create image
-
-	return aquarium_img_out(opts, path, out_path);
+	return aquarium_img_out(opts, aquarium_path, out_path) < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
 // copy files from outside of the aquarium

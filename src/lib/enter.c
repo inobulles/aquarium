@@ -92,6 +92,28 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path) {
 		goto setuid_root_err;
 	}
 
+	// set the correct ruleset for devfs
+
+	if (devfs_ruleset() < 0) {
+		goto devfs_ruleset_err;
+	}
+
+	// mount tmpfs filesystem for /tmp
+	// we don't wanna overwrite anything potentially already inside of /tmp
+	// to do that, the manual (nmount(2)) suggests we use the MNT_EMPTYDIR flag
+	// there seem to be a few inconsistencies vis-à-vis the type of 'flags', so instead we can simply use the 'emptydir' iov (as can be seen in '/usr/include/sys/mount.h')
+
+	struct iovec iov_tmp[] = {
+		__AQUARIUM_IOV("fstype", "tmpfs"),
+		__AQUARIUM_IOV("fspath", "tmp"),
+		__AQUARIUM_IOV("emptydir", ""),
+	};
+
+	if (nmount(iov_tmp, sizeof(iov_tmp) / sizeof(*iov_tmp), 0) < 0 && errno != ENOTEMPTY) {
+		warnx("nmount: failed to mount tmpfs for /tmp: %s", strerror(errno));
+		goto mount_tmpfs_err;
+	}
+
 	// mount devfs filesystem
 
 	struct iovec iov_dev[] = {
@@ -104,11 +126,8 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path) {
 		goto mount_devfs_err;
 	}
 
-	// set the correct ruleset for devfs
-
-	if (devfs_ruleset() < 0) {
-		goto devfs_ruleset_err;
-	}
+	// TODO callback here for stuff that needs the full devfs?
+	//      if I end up going down that route, add comment explaining why mounting the devfs filesystem comes last
 
 	// success
 
@@ -122,6 +141,13 @@ devfs_ruleset_err:
 	}
 
 mount_devfs_err:
+
+	if (unmount("tmp", 0) < 0) {
+		warnx("unmount(\"tmp\"): %s", strerror(errno));
+		rv = -1;
+	}
+
+mount_tmpfs_err:
 
 	if (setuid(uid) < 0) {
 		warnx("setuid(%d): %s", uid, strerror(errno));

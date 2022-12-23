@@ -24,7 +24,7 @@ static size_t align(size_t x, size_t bound) {
 
 static int create_mesh(struct gmesh* mesh, struct ggeom** geom, char* provider) {
 	if (geom_gettree(mesh) < 0) {
-		warnx("Failed to get drive geometry mesh: %s\n", strerror(errno));
+		warnx("Failed to get drive geometry mesh: %s", strerror(errno));
 		return -1;
 	}
 
@@ -39,7 +39,7 @@ static int create_mesh(struct gmesh* mesh, struct ggeom** geom, char* provider) 
 	}
 
 	if (!class) {
-		warnx("Failed to get partition class: %s\n", strerror(errno));
+		warnx("Failed to get partition class: %s", strerror(errno));
 		goto err;
 	}
 
@@ -52,15 +52,13 @@ static int create_mesh(struct gmesh* mesh, struct ggeom** geom, char* provider) 
 	}
 
 	if (!*geom) {
-		fprintf(stderr, "Could not find geom: %s\n", provider);
+		warnx("Could not find geom: %s", provider);
 		goto err;
 	}
 
 	rv = 0;
 
 err:
-
-	geom_deletetree(mesh);
 
 	return rv;
 }
@@ -76,7 +74,7 @@ static int create_gpt_table(aquarium_drive_t* drive) {
 	char const* const err= gctl_issue(handle);
 
 	if (err) {
-		warnx("Failed to create GPT partition table: %s\n", err);
+		warnx("Failed to create GPT partition table: %s", err);
 
 		gctl_free(handle);
 		return -1;
@@ -96,16 +94,9 @@ static int destroy_table(aquarium_drive_t* drive) {
 	int const forced = 1;
 	gctl_ro_param(handle, "force", sizeof forced, &forced);
 
-	char const* const err = gctl_issue(handle); // we don't care if this errors-out
-
-	if (err) {
-		warnx("Failed to destroy partition table: %s\n", err);
-
-		gctl_free(handle);
-		return -1;
-	}
-
+	gctl_issue(handle); // we don't care if this errors-out
 	gctl_free(handle);
+
 	return 0;
 }
 
@@ -152,7 +143,7 @@ int aquarium_format_new_table(aquarium_opts_t* opts, aquarium_drive_t* drive) {
 	char* const provider_path = g_device_path(provider);
 
 	if (!provider_path) {
-		warnx("g_device_path(\"%s\") failed\n", provider);
+		warnx("g_device_path(\"%s\") failed", provider);
 		goto g_device_path_err;
 	}
 
@@ -297,7 +288,7 @@ int aquarium_format_create_esp(aquarium_opts_t* opts, aquarium_drive_t* drive, c
 	snprintf(esp_dev_path, sizeof esp_dev_path, "/dev/%s", name);
 
 	if (mkfs_msdos(esp_dev_path, NULL, &options) < 0) {
-		warnx("Failed to create FAT32 filesystem in ESP\n");
+		warnx("Failed to create FAT32 filesystem in ESP");
 		goto mkfs_err;
 	}
 
@@ -314,7 +305,7 @@ int aquarium_format_create_esp(aquarium_opts_t* opts, aquarium_drive_t* drive, c
 	};
 
 	if (nmount(iov, sizeof(iov) / sizeof(*iov), 0) < 0) {
-		warnx("nmount(\"%s\", \"%s\"): %s\n", esp_dev_path, mountpoint, strerror(errno));
+		warnx("nmount(\"%s\", \"%s\"): %s", esp_dev_path, mountpoint, strerror(errno));
 		goto mount_err;
 	}
 

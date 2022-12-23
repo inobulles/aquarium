@@ -23,8 +23,9 @@ static void usage(void) {
 	fprintf(stderr,
 		"usage: %1$s [-r base]\n"
 		"       %1$s [-r base] -c path [-t template] [-k kernel_template]\n"
-		"       %1$s [-r base] -i path -o image\n"
 		"       %1$s [-r base] [-pv] -e path\n"
+		"       %1$s [-r base] -i path -o image\n"
+		"       %1$s [-r base] -I drive [-t template] [-k kernel_template]\n"
 		"       %1$s [-r base] -l\n"
 		"       %1$s [-r base] -s\n"
 		"       %1$s [-r base] -T path -o template\n"
@@ -110,6 +111,37 @@ static int do_create(aquarium_opts_t* opts) {
 	}
 
 	if (aquarium_create(opts, path, template, kernel_template) < 0) {
+		return EXIT_FAILURE;
+	}
+
+	return EXIT_SUCCESS;
+}
+
+static int do_install(aquarium_opts_t* opts) {
+	if (!path) {
+		usage();
+	}
+
+	char* const target = path;
+
+	// find our drive
+
+	aquarium_drive_t* drives = NULL;
+	size_t drives_len = 0;
+
+	if (aquarium_drives_read(&drives, &drives_len) < 0) {
+		return EXIT_FAILURE;
+	}
+
+	aquarium_drive_t* const drive = aquarium_drives_find(drives, drives_len, target);
+
+	if (!drive) {
+		return EXIT_FAILURE;
+	}
+
+	// create partition table on target
+
+	if (aquarium_format_new_table(opts, drive) < 0) {
 		return EXIT_FAILURE;
 	}
 
@@ -382,7 +414,7 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:e:fi:k:lo:pr:st:T:vy:")) != -1) {
+	while ((c = getopt(argc, argv, "c:e:fi:I:k:lo:pr:st:T:vy:")) != -1) {
 		// general options
 
 		if (c == 'p') {
@@ -411,6 +443,11 @@ int main(int argc, char* argv[]) {
 
 		else if (c == 'i') {
 			action = do_img_out;
+			path = optarg;
+		}
+
+		else if (c == 'I') {
+			action = do_install;
 			path = optarg;
 		}
 

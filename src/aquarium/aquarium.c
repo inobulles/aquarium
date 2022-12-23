@@ -105,17 +105,6 @@ static void usage(void) {
 
 // utility functions
 
-static inline char* __hash(char* str) { // djb2 algorithm
-	uint64_t hash = 5381;
-
-	while (*str) {
-		hash = ((hash << 5) + hash) + *str++;
-	}
-
-	asprintf(&str, "aquarium-%lx", hash);
-	return str;
-}
-
 typedef enum {
 	OS_GENERIC,
 	OS_FBSD,
@@ -162,43 +151,6 @@ static inline os_info_t __retrieve_os_info(const char* aquarium_path) {
 	}
 
 	return OS_GENERIC;
-}
-
-static inline void __load_kmod(const char* name) {
-	if (!kldload(name)) {
-		return;
-	}
-
-	if (errno == EEXIST) {
-		return;
-	}
-
-	// jammer, iets is fout gegaan
-
-	if (errno == ENOEXEC) {
-		errx(EXIT_FAILURE, "kldload(\"%s\"): please check dmesg(8) for details (or don't, I'm not your mum)", name);
-	}
-
-	errx(EXIT_FAILURE, "kldload(\"%s\"): %s", name, strerror(errno));
-}
-
-static void load_linux64_kmod(void) {
-	__load_kmod("linux64");
-}
-
-static inline int __wait_for_process(pid_t pid) {
-	int wstatus = 0;
-	while (waitpid(pid, &wstatus, 0) > 0);
-
-	if (WIFSIGNALED(wstatus)) {
-		return -1;
-	}
-
-	if (WIFEXITED(wstatus)) {
-		return WEXITSTATUS(wstatus);
-	}
-
-	return -1;
 }
 
 // actions
@@ -288,209 +240,9 @@ static int do_create(aquarium_opts_t* opts) {
 		usage();
 	}
 
-	if (*template == ILLEGAL_TEMPLATE_PREFIX) {
-		errx(EXIT_FAILURE, "%s template is illegal (starts with ILLEGAL_TEMPLATE_PREFIX, '%c'). Someone may be trying to swindle you!", template, ILLEGAL_TEMPLATE_PREFIX);
+	if (aquarium_create(opts, path, template, kernel_template) < 0) {
+		return EXIT_FAILURE;
 	}
-
-	// remember our current working directory for later
-
-	char* cwd = getcwd(NULL, 0);
-
-	if (!cwd) {
-		errx(EXIT_FAILURE, "getcwd: %s", strerror(errno));
-	}
-
-	// generate final aquarium path
-
-	char* aquarium_path; // don't care about freeing this (TODO: although I probably will if I factor this out into a libaquarium library)
-	asprintf(&aquarium_path, "%s%s-XXXXXXX", opts->aquariums_path, template);
-
-	aquarium_path = mkdtemp(aquarium_path);
-
-	if (!aquarium_path) {
-		errx(EXIT_FAILURE, "mkdtemp: failed to create aquarium directory: %s", strerror(errno));
-	}
-
-	// check that pointer file isn't already in the aquarium database
-	// if it doesn't yet exist, the 'realpath' call will fail (which we don't want if 'flags & FLAGS_CREATE')
-	// although it's cumbersome, I really wanna use realpath here to reduce points of failure
-	// to be honest, I think it's a mistake not to have included a proper way of checking path hierarchy in POSIX
-
-	// TODO haven't yet thought about how safe this'd be, but since the aquarium database also contains what the pointer file was supposed to point to, maybe it could be cool for this to automatically regenerate the pointer file instead of erroring?
-
-	if (!access(path, F_OK)) {
-		errx(EXIT_FAILURE, "Pointer file %s already exists", path);
-	}
-
-	int fd = creat(path, 0 /* don't care about mode */);
-
-	if (!fd) {
-		errx(EXIT_FAILURE, "creat(\"%s\"): %s", path, strerror(errno));
-	}
-
-	char* abs_path = realpath(path, NULL);
-
-	close(fd);
-	remove(path);
-
-	if (!abs_path) {
-		errx(EXIT_FAILURE, "realpath(\"%s\"): %s", path, strerror(errno));
-	}
-
-	FILE* fp = fopen(opts->db_path, "r");
-
-	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", opts->db_path, strerror(errno));
-	}
-
-	char buf[1024];
-	aquarium_db_ent_t ent;
-
-	while (aquarium_db_next_ent(opts, &ent, sizeof buf, buf, fp, true)) {
-		if (!strcmp(ent.pointer_path, abs_path)) {
-			errx(EXIT_FAILURE, "Pointer file already exists in the aquarium database at %s (pointer file is supposed to reside at %s and point to %s)", opts->db_path, ent.pointer_path, ent.aquarium_path);
-		}
-	}
-
-	fclose(fp);
-
-	// setuid root
-
-	uid_t uid = getuid();
-
-	if (setuid(0) < 0) {
-		errx(EXIT_FAILURE, "setuid(0): %s", strerror(errno));
-	}
-
-	// extract templates
-
-	(void) (template && aquarium_extract_template(opts, aquarium_path, template, AQUARIUM_TEMPLATE_KIND_BASE) < 0);
-	(void) (kernel_template && aquarium_extract_template(opts, aquarium_path, kernel_template, AQUARIUM_TEMPLATE_KIND_KERNEL) < 0);
-
-	// copy over /etc/resolv.conf for networking to, well, work
-
-	#define COPYFILE_DEBUG (1 << 31)
-
-	if (copyfile("/etc/resolv.conf", "etc/resolv.conf", 0, COPYFILE_ALL) < 0) {
-		errx(EXIT_FAILURE, "copyfile: %s", strerror(errno));
-	}
-
-	// write info to aquarium database
-
-	/* FILE* */ fp = fopen(opts->db_path, "a");
-
-	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", opts->db_path, strerror(errno));
-	}
-
-	fprintf(fp, "%s:%s\n", abs_path, aquarium_path);
-
-	free(abs_path);
-	fclose(fp);
-
-	// enter the newly created aquarium to do a bit of configuration
-	// we can't do this is all in C, because, well, there's a chance the template is not the operating system we're currently running
-	// this does thus depend a lot on the platform we're running on
-	// the solution here is to generate an initial setup script depending on the aquarium's OS, which we then run in the aquarium
-
-	char* name = strrchr(path, '/');
-
-	if (!name) {
-		name = path;
-	}
-
-	struct passwd* passwd = getpwuid(uid);
-	char* username = passwd->pw_name;
-
-	os_info_t os = __retrieve_os_info(NULL);
-	char* setup_script_fmt;
-
-	#define SETUP_SCRIPT_HEADER \
-		"#!/bin/sh\n" \
-		"set -e;" \
-		\
-		"hostname=%s;" \
-		\
-		"echo $hostname > /etc/hostname;" \
-		"echo 127.0.0.1 $hostname >> /etc/hosts;"
-
-	if (os == OS_LINUX) {
-		load_linux64_kmod();
-
-		setup_script_fmt = SETUP_SCRIPT_HEADER
-			// fix APT defaults
-
-			"echo APT::Cache-Start \\\"100000000\\\"\\; >> /etc/apt/apt.conf.d/10cachestart;"
-			"sed -i 's/$/\\ universe/' /etc/apt/sources.list;"
-
-			// broken symlink (symbolic, not hard!) which needs to be fixed for the dynamic linker to work
-
-			"ln -sf ../lib/x86_64-linux-gnu/ld-2.31.so /lib64/ld-linux-x86-64.so.2;";
-	}
-
-	else {
-		setup_script_fmt = SETUP_SCRIPT_HEADER;
-	}
-
-	char* setup_script;
-	asprintf(&setup_script, setup_script_fmt, username, uid, name);
-
-	// create the jail for the aquarium
-	// a few considerations here, because it seems appropriate to make these public:
-	//  - the various keys you can use for jailparams can be found in 'usr.sbin/jail/config.c', and they are the ones *without* the 'PF_INTERNAL' flag
-	//  - those which do have the 'PF_INTERNAL' flag (e.g. "mount.devfs" & "vnet.interface") are generally dished out to external commands (which can be found in 'usr.sbin/jail/command.c')
-	//  - this is done in a separate process, because we still want to come back to the original CWD to create the pointer file
-
-	// fork the process and actually create that jail and run that initial setup script
-	// then, wait for it to finish parent-side (and check for errors blah blah)
-
-	pid_t setup_pid = fork();
-
-	if (!setup_pid) {
-		// child process here
-
-		struct jailparam args[16] = { 0 };
-		size_t args_len = 0;
-
-		JAILPARAM("name", __hash(aquarium_path)) // don't care about freeing
-		JAILPARAM("path", aquarium_path)
-
-		if (jailparam_set(args, args_len, JAIL_CREATE | JAIL_ATTACH) < 0) {
-			errx(EXIT_FAILURE, "jailparam_set: %s (%s)", strerror(errno), jail_errmsg);
-		}
-
-		jailparam_free(args, args_len);
-
-		execl("/bin/sh", "/bin/sh", "-c", setup_script, NULL);
-		_exit(EXIT_FAILURE);
-	}
-
-	int child_rv = __wait_for_process(setup_pid);
-
-	if (child_rv < 0) {
-		errx(EXIT_FAILURE, "Child setup process exited with error code %d", child_rv);
-	}
-
-	// finish writing pointer file as user
-
-	if (setuid(uid) < 0) {
-		errx(EXIT_FAILURE, "setuid(%d): %s", uid, strerror(errno));
-	}
-
-	// change back to where we were and write to pointer file
-
-	if (chdir(cwd) < 0) {
-		errx(EXIT_FAILURE, "chdir(\"%s\"): %s", cwd, strerror(errno));
-	}
-
-	/* FILE* */ fp = fopen(path, "wx");
-
-	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", path, strerror(errno));
-	}
-
-	fprintf(fp, "%s", aquarium_path);
-	fclose(fp);
 
 	return EXIT_SUCCESS;
 }
@@ -532,10 +284,10 @@ static int do_enter(aquarium_opts_t* opts) {
 	char* aquarium_path = aquarium_db_read_pointer_file(opts, path);
 
 	if (aquarium_enter(opts, aquarium_path, enter_cb, NULL) < 0) {
-		return -1;
+		return EXIT_FAILURE;
 	}
 
-	return 0;
+	return EXIT_SUCCESS;
 }
 
 // sweeping aquariums (takes in nothing):
@@ -596,7 +348,7 @@ static void __remove_aquarium(char* aquarium_path) {
 		_exit(EXIT_FAILURE);
 	}
 
-	__wait_for_process(rm_pid);
+	__aquarium_wait_for_process(rm_pid);
 }
 
 static int do_sweep(aquarium_opts_t* opts) {

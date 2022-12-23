@@ -82,6 +82,48 @@ open_err:
 
 // OS-specific setup functions
 
+static int freebsd_setup(void) {
+	// mount fdescfs
+	// ignore ENOENT, because we may be prevented from mounting by the devfs ruleset
+
+	struct iovec iov_fd[] = {
+		__AQUARIUM_IOV("fstype", "fdescfs"),
+		__AQUARIUM_IOV("fspath", "dev/fd"),
+	};
+
+	if (nmount(iov_fd, sizeof(iov_fd) / sizeof(*iov_fd), 0) < 0 && errno != ENOENT) {
+		warnx("nmount: failed to mount fdescfs: %s", strerror(errno));
+		goto mount_fd_err;
+	}
+
+	// mount procfs
+
+	struct iovec iov_proc[] = {
+		__AQUARIUM_IOV("fstype", "procfs"),
+		__AQUARIUM_IOV("fspath", "proc"),
+	};
+
+	if (nmount(iov_proc, sizeof(iov_proc) / sizeof(*iov_proc), 0) < 0) {
+		warnx("nmount: failed to mount procfs: %s", strerror(errno));
+		goto mount_proc_err;
+	}
+
+	// success
+
+	return 0;
+
+	__attribute__((unused)) int rv; // dummy variable for TRY_UMOUNT macro
+	TRY_UMOUNT("proc")
+
+mount_proc_err:
+
+	TRY_UMOUNT("dev/fd")
+
+mount_fd_err:
+
+	return -1;
+}
+
 static int linux_setup(void) {
 	if (aquarium_os_load_linux64_kmod() < 0) {
 		goto load_kmod_err;
@@ -169,49 +211,16 @@ static int ubuntu_setup(void) {
 	return linux_setup();
 }
 
-static int freebsd_setup(void) {
-	// mount fdescfs
-	// ignore ENOENT, because we may be prevented from mounting by the devfs ruleset
+// OS-specific setdown (lol) functions
 
-	struct iovec iov_fd[] = {
-		__AQUARIUM_IOV("fstype", "fdescfs"),
-		__AQUARIUM_IOV("fspath", "dev/fd"),
-	};
+static int freebsd_setdown(void) {
+	int rv = 0;
 
-	if (nmount(iov_fd, sizeof(iov_fd) / sizeof(*iov_fd), 0) < 0 && errno != ENOENT) {
-		warnx("nmount: failed to mount fdescfs: %s", strerror(errno));
-		goto mount_fd_err;
-	}
-
-	// mount procfs
-
-	struct iovec iov_proc[] = {
-		__AQUARIUM_IOV("fstype", "procfs"),
-		__AQUARIUM_IOV("fspath", "proc"),
-	};
-
-	if (nmount(iov_proc, sizeof(iov_proc) / sizeof(*iov_proc), 0) < 0) {
-		warnx("nmount: failed to mount procfs: %s", strerror(errno));
-		goto mount_proc_err;
-	}
-
-	// success
-
-	return 0;
-
-	__attribute__((unused)) int rv; // dummy variable for TRY_UMOUNT macro
 	TRY_UMOUNT("proc")
-
-mount_proc_err:
-
 	TRY_UMOUNT("dev/fd")
 
-mount_fd_err:
-
-	return -1;
+	return rv;
 }
-
-// OS-specific setdown (lol) functions
 
 static int linux_setdown(void) {
 	int rv = 0;
@@ -226,15 +235,6 @@ static int linux_setdown(void) {
 
 static int ubuntu_setdown(void) {
 	return linux_setdown();
-}
-
-static int freebsd_setdown(void) {
-	int rv = 0;
-
-	TRY_UMOUNT("proc")
-	TRY_UMOUNT("dev/fd")
-
-	return rv;
 }
 
 int aquarium_enter(aquarium_opts_t* opts, char const* path) {
@@ -297,11 +297,11 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path) {
 
 	aquarium_os_info_t const os = aquarium_os_info(NULL);
 
-	if (os == AQUARIUM_OS_UBUNTU && ubuntu_setup() < 0) {
+	if (os == AQUARIUM_OS_FREEBSD && freebsd_setup() < 0) {
 		goto os_setup_err;
 	}
 
-	if (os == AQUARIUM_OS_FREEBSD && freebsd_setup() < 0) {
+	if (os == AQUARIUM_OS_UBUNTU && ubuntu_setup() < 0) {
 		goto os_setup_err;
 	}
 
@@ -410,11 +410,11 @@ procctl_err:
 
 devfs_ruleset_err:
 
-	if (os == AQUARIUM_OS_UBUNTU && ubuntu_setdown() < 0) {
+	if (os == AQUARIUM_OS_FREEBSD && freebsd_setdown() < 0) {
 		rv = -1;
 	}
 
-	if (os == AQUARIUM_OS_FREEBSD && freebsd_setdown() < 0) {
+	if (os == AQUARIUM_OS_UBUNTU && ubuntu_setdown() < 0) {
 		rv = -1;
 	}
 

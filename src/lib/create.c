@@ -4,6 +4,7 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <pwd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -96,7 +97,46 @@ err:
 	return rv;
 }
 
-static int config(void) {
+static char* setup_script_unix(char* hostname) {
+	char* script;
+
+	if (asprintf(&script,
+		"#!/bin/sh\n"
+		"set -e;"
+
+		"hostname=%s;"
+
+		"echo $hostname > /etc/hostname;"
+		"echo 127.0.0.1 $hostname >> /etc/hosts;",
+	hostname)) {}
+
+	return script;
+}
+
+static char* setup_script_freebsd(char* hostname) {
+	return setup_script_unix(hostname);
+}
+
+static char* setup_script_ubuntu(char* hostname) {
+	char* const unix_script = setup_script_unix(hostname);
+	char* script;
+
+	if (asprintf(&script, "%s"
+		// fix APT defaults
+
+		"echo APT::Cache-Start \\\"100000000\\\"\\; >> /etc/apt/apt.conf.d/10cachestart;"
+		"sed -i 's/$/\\ universe/' /etc/apt/sources.list;"
+
+		// broken symlink (symbolic, not hard!) which needs to be fixed for the dynamic linker to work
+
+		"ln -sf ../lib/x86_64-linux-gnu/ld-2.31.so /lib64/ld-linux-x86-64.so.2;",
+	unix_script)) {}
+
+	free(unix_script);
+	return script;
+}
+
+static int config(char* path) {
 	// copy over /etc/resolv.conf so we don't have to use DHCP when using the host's interface
 
 	if (copyfile("/etc/resolv.conf", "etc/resolv.conf", 0, COPYFILE_ALL) < 0) {
@@ -104,7 +144,41 @@ static int config(void) {
 		return -1;
 	}
 
-	return 0;
+	int rv = -1;
+
+	// enter the newly created aquarium to do a bit of configuration
+	// we can't do this is all in C, because, well, there's a chance the template is not the operating system we're currently running
+	// this does thus depend a lot on the platform we're running on
+	// the solution here is to generate an initial setup script depending on the aquarium's OS, which we then run in the aquarium
+
+	char* name = strrchr(path, '/');
+
+	if (!name) {
+		name = path;
+	}
+
+	// create OS-specific setup script
+
+	aquarium_os_info_t const os = aquarium_os_info(path);
+	char* setup_script = "";
+
+	if (os == AQUARIUM_OS_FREEBSD && !(setup_script = setup_script_freebsd(name))) {
+		goto setup_script_err;
+	}
+
+	if (os == AQUARIUM_OS_UBUNTU && !(setup_script = setup_script_ubuntu(name))) {
+		goto setup_script_err;
+	}
+
+	// success
+
+	rv = 0;
+
+	free(setup_script);
+
+setup_script_err:
+
+	return rv;
 }
 
 int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const* template, char const* kernel_template) {
@@ -221,7 +295,7 @@ int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const*
 
 	// configure the newly created aquarium
 
-	if (config() < 0) {
+	if (config(path) < 0) {
 		goto config_err;
 	}
 

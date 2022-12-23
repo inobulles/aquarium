@@ -184,13 +184,20 @@ static int config(aquarium_opts_t* opts, char* path) {
 	// create OS-specific setup script
 
 	aquarium_os_t const os = aquarium_os_info(path);
-	char* setup_script = "";
+	char* setup_script = NULL;
 
 	if (os == AQUARIUM_OS_FREEBSD && !(setup_script = setup_script_freebsd(name))) {
 		goto setup_script_err;
 	}
 
 	if (os == AQUARIUM_OS_UBUNTU && !(setup_script = setup_script_ubuntu(name))) {
+		goto setup_script_err;
+	}
+
+	// if no setup script, just go to 'setup_script_err' successfully
+
+	if (!setup_script) {
+		rv = 0;
 		goto setup_script_err;
 	}
 

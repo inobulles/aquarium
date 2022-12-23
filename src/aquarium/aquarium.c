@@ -228,7 +228,11 @@ static int enter_cb(__attribute__((unused)) void* param) {
 }
 
 static int do_enter(aquarium_opts_t* opts) {
-	char* aquarium_path = aquarium_db_read_pointer_file(opts, path);
+	char* const aquarium_path = aquarium_db_read_pointer_file(opts, path);
+
+	if (!aquarium_path) {
+		return EXIT_FAILURE;
+	}
 
 	if (aquarium_enter(opts, aquarium_path, enter_cb, NULL) < 0) {
 		return EXIT_FAILURE;
@@ -586,6 +590,11 @@ static int do_img_out(aquarium_opts_t* opts) {
 	}
 
 	char* const aquarium_path = aquarium_db_read_pointer_file(opts, path);
+
+	if (!aquarium_path) {
+		return EXIT_FAILURE;
+	}
+
 	return aquarium_img_out(opts, aquarium_path, out_path) < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 

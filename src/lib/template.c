@@ -323,7 +323,7 @@ int aquarium_extract_template(aquarium_opts_t* opts, char const* path, char cons
 	archive_read_support_filter_all(archive);
 	archive_read_support_format_all(archive);
 
-	if (archive_read_open_filename(archive, opts->templates_path, ARCHIVE_CHUNK_BYTES) < 0) {
+	if (archive_read_open_filename(archive, template_path, ARCHIVE_CHUNK_BYTES) < 0) {
 		warnx("archive_read_open_filename: failed to open %s template: %s", template_path, archive_error_string(archive));
 		goto archive_read_open_err;
 	}

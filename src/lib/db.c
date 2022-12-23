@@ -95,7 +95,7 @@ char* aquarium_db_read_pointer_file(aquarium_opts_t* opts, char const* path) {
 	char buf[1024];
 	aquarium_db_ent_t ent;
 
-	while (aquarium_db_next_ent(opts, &ent, sizeof buf, buf, fp, true)) {
+	while (aquarium_db_next_ent(opts, &ent, sizeof buf, buf, db_fp, true)) {
 		if (strcmp(ent.pointer_path, abs_path)) {
 			continue;
 		}

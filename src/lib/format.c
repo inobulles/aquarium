@@ -1,5 +1,3 @@
-#include "include/sys/fs/zfs.h"
-#include "include/sys/nvpair.h"
 #include <aquarium.h>
 #include <err.h>
 #include <errno.h>
@@ -442,7 +440,15 @@ vdev_alloc_err:
 #define BE_ROOT_NAME "benv" // name of the root dataset containing all boot environments (equivalent to 'ROOT')
 #define BE_DEFAULT "current" // name of the default boot environment (equivalent to 'default')
 
-static int create_zfs_dataset(libzfs_handle_t* handle, char const* pool, char const* dataset, char const* canmount, char const* mountpoint) {
+typedef enum {
+	FLAG_CANMOUNT_OFF    = 0b0001,
+	FLAG_CANMOUNT_NOAUTO = 0b0010,
+
+	FLAG_NO_SETUID       = 0b0100,
+	FLAG_NO_EXEC         = 0b1000,
+} flag_t;
+
+static int create_zfs_dataset(libzfs_handle_t* handle, char const* pool, char const* dataset, flag_t flag, char const* mountpoint) {
 	int rv = -1;
 
 	// create properties list
@@ -454,7 +460,22 @@ static int create_zfs_dataset(libzfs_handle_t* handle, char const* pool, char co
 		goto props_alloc_err;
 	}
 
-	ADD_PROP(props, props_err, string, zfs_prop_to_name(ZFS_PROP_CANMOUNT), canmount);
+	if (flag & FLAG_CANMOUNT_OFF) {
+		ADD_PROP(props, props_err, string, zfs_prop_to_name(ZFS_PROP_CANMOUNT), "off");
+	}
+
+	if (flag & FLAG_CANMOUNT_NOAUTO) {
+		ADD_PROP(props, props_err, string, zfs_prop_to_name(ZFS_PROP_CANMOUNT), "noauto");
+	}
+
+	if (flag & FLAG_NO_SETUID) {
+		ADD_PROP(props, props_err, string, zfs_prop_to_name(ZFS_PROP_SETUID), "off");
+	}
+
+	if (flag & FLAG_NO_EXEC) {
+		ADD_PROP(props, props_err, string, zfs_prop_to_name(ZFS_PROP_EXEC), "off");
+	}
+
 	ADD_PROP(props, props_err, string, zfs_prop_to_name(ZFS_PROP_MOUNTPOINT), mountpoint);
 
 	// create dataset itself
@@ -557,13 +578,39 @@ int aquarium_format_create_zfs(aquarium_opts_t* opts, aquarium_drive_t* drive, c
 		goto zfs_pool_err;
 	}
 
+	// create datasets
+
+#define DATASET(name, flags, mountpoint) \
+	if (create_zfs_dataset(handle, pool, (name), (flags), (mountpoint)) < 0) { \
+		goto create_dataset_err; \
+	}
+
 	// create boot environment datasets
 
-	create_zfs_dataset(handle, pool, BE_ROOT_NAME, "noauto", "none");
+	DATASET(BE_ROOT_NAME, FLAG_CANMOUNT_NOAUTO, "none");
+	DATASET(BE_ROOT_NAME "/" BE_DEFAULT, FLAG_CANMOUNT_NOAUTO, "/");
+
+	// create all other filesystems as datasets
+	// '/tmp' & '/var/tmp' will be added as tmpfs entries to '/etc/fstab' once the full system is installed
+
+	DATASET("usr", FLAG_CANMOUNT_OFF, "/usr");
+	DATASET("var", FLAG_CANMOUNT_OFF, "/var");
+
+	DATASET("usr/home", 0 , "/usr/home");
+	DATASET("usr/obj", 0, "/usr/obj");
+	DATASET("usr/ports", FLAG_NO_SETUID, "/usr/ports");
+	DATASET("usr/src", FLAG_NO_SETUID | FLAG_NO_EXEC, "/usr/src");
+
+	DATASET("var/audit", FLAG_NO_SETUID | FLAG_NO_EXEC, "/var/audit");
+	DATASET("var/crash", FLAG_NO_SETUID | FLAG_NO_EXEC, "/var/crash");
+	DATASET("var/log",   FLAG_NO_SETUID | FLAG_NO_EXEC, "/var/log");
+	DATASET("var/mail",  FLAG_NO_SETUID | FLAG_NO_EXEC, "/var/mail");
 
 	// success
 
 	rv = 0;
+
+create_dataset_err:
 
 	zpool_close(pool_handle);
 

@@ -384,73 +384,90 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 
 	// attempt to get the jail ID
 	// if found, we can skip the jail creation step & attach ourselves to it right away
+	// this all happens in a child process, because jail_attach will steal our process
 
-	int const jid = jail_getid(hash);
+	pid_t const pid = fork();
 
-	struct jailparam args[16] = { 0 };
-	size_t args_len = 0;
+	if (pid < 0) {
+		warnx("fork: %s", strerror(errno));
+		goto fork_err;
+	}
 
-	if (jid >= 0) {
-		if (jail_attach(jid) < 0) {
-			warnx("jail_attach(%d): %s", jid, strerror(errno));
-			goto early_jail_attach_err;
+	if (!pid) {
+		int const jid = jail_getid(hash);
+
+		struct jailparam args[16] = { 0 };
+		size_t args_len = 0;
+
+		if (jid >= 0) {
+			if (jail_attach(jid) < 0) {
+				warnx("jail_attach(%d): %s", jid, strerror(errno));
+				_exit(EXIT_FAILURE);
+			}
+
+			goto inside;
 		}
 
-		goto inside;
+		// create the jail
+
+		char* hostname = strrchr(path, '/');
+
+		if (!hostname) {
+			hostname = (void*) path;
+		}
+
+		JAILPARAM("name", hash)
+		JAILPARAM("path", path)
+		JAILPARAM("host.hostname", hostname)
+		JAILPARAM("allow.mount", "false")
+		JAILPARAM("allow.mount.devfs", "false")
+		JAILPARAM("allow.raw_sockets", "true") // to allow us to send ICMP packets (for ping)
+		JAILPARAM("allow.socket_af", "true")
+
+		if (!opts->vnet_disable) {
+			JAILPARAM("vnet", NULL)
+		}
+
+		else {
+			JAILPARAM("ip4", "inherit")
+			JAILPARAM("ip6", "inherit")
+		}
+
+		if (opts->persist) {
+			JAILPARAM("persist", NULL)
+		}
+
+		if (jailparam_set(args, args_len, JAIL_CREATE | JAIL_ATTACH) < 0) {
+			warnx("jailparam_set: %s (%s)", strerror(errno), jail_errmsg);
+			_exit(EXIT_FAILURE);
+		}
+
+		// we're now inside of the aquarium
+
+	inside:
+
+		if (cb(param) < 0) {
+			_exit(EXIT_FAILURE);
+		}
+
+		_exit(EXIT_SUCCESS);
 	}
 
-	// create the jail
+	// wait for child process
 
-	char* hostname = strrchr(path, '/');
+	int const child_rv = __aquarium_wait_for_process(pid);
 
-	if (!hostname) {
-		hostname = (void*) path;
-	}
-
-	JAILPARAM("name", hash)
-	JAILPARAM("path", path)
-	JAILPARAM("host.hostname", hostname)
-	JAILPARAM("allow.mount", "false")
-	JAILPARAM("allow.mount.devfs", "false")
-	JAILPARAM("allow.raw_sockets", "true") // to allow us to send ICMP packets (for ping)
-	JAILPARAM("allow.socket_af", "true")
-
-	if (!opts->vnet_disable) {
-		JAILPARAM("vnet", NULL)
-	}
-
-	else {
-		JAILPARAM("ip4", "inherit")
-		JAILPARAM("ip6", "inherit")
-	}
-
-	if (opts->persist) {
-		JAILPARAM("persist", NULL)
-	}
-
-	if (jailparam_set(args, args_len, JAIL_CREATE | JAIL_ATTACH) < 0) {
-		warnx("jailparam_set: %s (%s)", strerror(errno), jail_errmsg);
-		goto jailparam_set_err;
-	}
-
-	// we're now inside of the aquarium
-
-inside:
-
-	if (cb(param) < 0) {
-		goto cb_err;
+	if (child_rv != EXIT_SUCCESS) {
+		warnx("Child enter process exited with error code %d", child_rv);
+		goto child_err;
 	}
 
 	// success
 
 	rv = 0;
 
-cb_err:
-jailparam_set_err:
-
-	jailparam_free(args, args_len);
-
-early_jail_attach_err:
+child_err:
+fork_err:
 
 	free(hash);
 

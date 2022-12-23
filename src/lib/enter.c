@@ -64,6 +64,14 @@ open_err:
 	return rv;
 }
 
+static int ubuntu_setup(void) {
+	return 0;
+}
+
+static int freebsd_setup(void) {
+	return 0;
+}
+
 int aquarium_enter(aquarium_opts_t* opts, char const* path) {
 	int rv = -1;
 
@@ -90,12 +98,6 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path) {
 	if (setuid(0) < 0) {
 		warnx("setuid(0): %s", strerror(errno));
 		goto setuid_root_err;
-	}
-
-	// set the correct ruleset for devfs
-
-	if (devfs_ruleset() < 0) {
-		goto devfs_ruleset_err;
 	}
 
 	// mount tmpfs filesystem for /tmp
@@ -126,8 +128,30 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path) {
 		goto mount_devfs_err;
 	}
 
-	// TODO callback here for stuff that needs the full devfs?
-	//      if I end up going down that route, add comment explaining why mounting the devfs filesystem comes last
+	// OS-specific actions
+
+	aquarium_os_info_t os = aquarium_os_info(NULL);
+
+	if (os == AQUARIUM_OS_UBUNTU && ubuntu_setup() < 0) {
+		goto os_setup_err;
+	}
+
+	if (os == AQUARIUM_OS_FREEBSD && freebsd_setup() < 0) {
+		goto os_setup_err;
+	}
+
+	else if (os == AQUARIUM_OS_FREEBSD) {
+
+	}
+
+	// set the correct ruleset for devfs
+	// this comes last, so any setup scripts still have full access to the devfs filesystem
+
+	if (devfs_ruleset() < 0) {
+		goto devfs_ruleset_err;
+	}
+
+	// TODO callback to shit that happens while we're in the aquarium
 
 	// success
 
@@ -140,6 +164,7 @@ devfs_ruleset_err:
 		rv = -1;
 	}
 
+os_setup_err:
 mount_devfs_err:
 
 	if (unmount("tmp", 0) < 0) {

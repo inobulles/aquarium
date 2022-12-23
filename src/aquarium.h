@@ -15,8 +15,8 @@
 
 typedef enum {
 	AQUARIUM_OS_GENERIC,
-	AQUARIUM_OS_FBSD,
-	AQUARIUM_OS_LINUX,
+	AQUARIUM_OS_FREEBSD,
+	AQUARIUM_OS_UBUNTU,
 } aquarium_os_info_t;
 
 typedef enum {
@@ -90,6 +90,7 @@ int aquarium_download_template(aquarium_opts_t* opts, char const* path, char con
 int aquarium_extract_template(aquarium_opts_t* opts, char const* path, char const* name, aquarium_template_kind_t kind);
 
 aquarium_os_info_t aquarium_os_info(char const* path);
+int aquarium_os_load_linux64_kmod(void);
 
 int aquarium_create(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template);
 

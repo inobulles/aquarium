@@ -606,9 +606,22 @@ int aquarium_format_create_zfs(aquarium_opts_t* opts, aquarium_drive_t* drive, c
 	DATASET("var/log",   FLAG_NO_SETUID | FLAG_NO_EXEC, "/var/log");
 	DATASET("var/mail",  FLAG_NO_SETUID | FLAG_NO_EXEC, "/var/mail");
 
+	// finally, set our active boot environment to the current one
+
+	char* benv;
+	assert(!asprintf(&benv, "%s/" BE_ROOT_NAME "/" BE_DEFAULT, pool));
+
+	if (zpool_set_prop(pool_handle, "bootfs", benv) < 0) {
+		goto set_bootfs_err;
+	}
+
 	// success
 
 	rv = 0;
+
+set_bootfs_err:
+
+	free(benv);
 
 create_dataset_err:
 

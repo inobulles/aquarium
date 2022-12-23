@@ -1,3 +1,5 @@
+#include "include/sys/fs/zfs.h"
+#include "include/sys/nvpair.h"
 #include <aquarium.h>
 #include <err.h>
 #include <errno.h>
@@ -347,6 +349,12 @@ name_err:
 	return rv;
 }
 
+#define ADD_PROP(vdev, err, type, k, ...) \
+	if (nvlist_add_##type((vdev), (k), __VA_ARGS__) < 0) { \
+		warnx("nvlist_add_" #type ": k = '%s'", k); \
+		goto err; \
+	}
+
 static zpool_handle_t* create_zfs_pool(libzfs_handle_t* handle, char const* name, char const* part, char const* mountpoint) {
 	// % zpool create $name $part
 
@@ -354,12 +362,6 @@ static zpool_handle_t* create_zfs_pool(libzfs_handle_t* handle, char const* name
 
 	char zfs_dev_path[256];
 	snprintf(zfs_dev_path, sizeof zfs_dev_path, "/dev/%s", part);
-
-#define ADD_PROP(vdev, err, type, k, ...) \
-	if (nvlist_add_##type((vdev), (k), __VA_ARGS__) < 0) { \
-		warnx("nvlist_add_" #type ": k = '%s'", k); \
-		goto err; \
-	}
 
 	// create a vdev (analogous to a physical partition)
 
@@ -437,6 +439,90 @@ vdev_alloc_err:
 	return pool_handle;
 }
 
+#define BE_ROOT_NAME "benv" // name of the root dataset containing all boot environments (equivalent to 'ROOT')
+#define BE_DEFAULT "current" // name of the default boot environment (equivalent to 'default')
+
+static int create_zfs_dataset(libzfs_handle_t* handle, char const* pool, char const* dataset, char const* canmount, char const* mountpoint) {
+	int rv = -1;
+
+	// create properties list
+
+	nvlist_t* props;
+
+	if (nvlist_alloc(&props, NV_UNIQUE_NAME, 0) < 0) {
+		warnx("nvlist_alloc: Failed to allocate props nvlist");
+		goto props_alloc_err;
+	}
+
+	ADD_PROP(props, props_err, string, zfs_prop_to_name(ZFS_PROP_CANMOUNT), canmount);
+	ADD_PROP(props, props_err, string, zfs_prop_to_name(ZFS_PROP_MOUNTPOINT), mountpoint);
+
+	// create dataset itself
+
+	char* name;
+	assert(!asprintf(&name, "%s/%s", pool, dataset));
+
+	if (zfs_create(handle, name, ZFS_TYPE_DATASET, props) < 0) {
+		warnx("zfs_create(\"%s\")", name);
+		goto create_err;
+	}
+
+	// get handle to dataset
+
+	zfs_handle_t* fs_handle = zfs_open(handle, name, ZFS_TYPE_FILESYSTEM);
+
+	if (!fs_handle) {
+		warnx("zfs_open(\"%s\")", name);
+		goto open_err;
+	}
+
+	// succeed straight away if already mounted
+
+	if (zfs_is_mounted(fs_handle, NULL)) {
+		rv = 0;
+		goto already_mounted;
+	}
+
+	// succeed straight away if we're not allowed to mount
+
+	bool const real_canmount = zfs_prop_get_int(fs_handle, ZFS_PROP_CANMOUNT);
+
+	if (real_canmount != ZFS_CANMOUNT_ON) { // 'ZFS_CANMOUNT_OFF' or 'ZFS_CANMOUNT_NOAUTO'
+		rv = 0;
+		goto no_canmount;
+	}
+
+	// attempt to mount
+
+	if (zfs_mount(fs_handle, NULL, 0) < 0) {
+		warnx("zfs_mount(\"%s\")", name);
+		goto mount_err;
+	}
+
+	// success
+
+	rv = 0;
+
+mount_err:
+no_canmount:
+already_mounted:
+
+	zfs_close(fs_handle);
+
+open_err:
+create_err:
+
+	free(name);
+
+props_err:
+
+	nvlist_free(props);
+
+props_alloc_err:
+
+	return rv;
+}
+
 int aquarium_format_create_zfs(aquarium_opts_t* opts, aquarium_drive_t* drive, char const* path) {
 	int rv = -1;
 
@@ -464,11 +550,16 @@ int aquarium_format_create_zfs(aquarium_opts_t* opts, aquarium_drive_t* drive, c
 	char* mountpoint;
 	assert(!asprintf(&mountpoint, "%s/mnt", path));
 
-	zpool_handle_t* const pool_handle = create_zfs_pool(handle, opts->rootfs_label, name, mountpoint);
+	char* const pool = opts->rootfs_label;
+	zpool_handle_t* const pool_handle = create_zfs_pool(handle, pool, name, mountpoint);
 
 	if (!pool_handle) {
 		goto zfs_pool_err;
 	}
+
+	// create boot environment datasets
+
+	create_zfs_dataset(handle, pool, BE_ROOT_NAME, "noauto", "none");
 
 	// success
 

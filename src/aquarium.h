@@ -74,10 +74,10 @@ typedef struct {
 	char* provider;
 	int rank;
 
-	uint64_t sectors;
-	uint64_t sector_size;
+	size_t sectors;
+	size_t sector_size;
 
-	uint64_t size;
+	size_t size;
 
 	char* ident;
 	char* name;
@@ -116,8 +116,9 @@ int aquarium_drives_read(aquarium_drive_t** drives_ref, size_t* drives_len_ref);
 void aquarium_drives_free(aquarium_drive_t* drives, size_t drives_len);
 aquarium_drive_t* aquarium_drives_find(aquarium_drive_t* drives, size_t drives_len, char const* provider);
 
-int aquarium_format_new_table(aquarium_drive_t* drive);
+int aquarium_format_new_table(aquarium_opts_t* opts, aquarium_drive_t* drive);
 int aquarium_format_create_esp(aquarium_opts_t* opts, aquarium_drive_t* drive, char const* path);
+int aquarium_format_create_zfs(aquarium_opts_t* opts, aquarium_drive_t* drive, char const* path);
 
 int aquarium_img_populate_esp(char const* path, char const* stage);
 int aquarium_img_out(aquarium_opts_t* opts, char const* path, char const* out);

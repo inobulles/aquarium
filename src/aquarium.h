@@ -107,6 +107,8 @@ int aquarium_create(aquarium_opts_t* opts, char const* path, char const* templat
 int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t cb, void* param);
 int aquarium_enter_setdown(char const* path, aquarium_os_t os);
 
+int aquarium_sweep(aquarium_opts_t* opts);
+
 int aquarium_drives_read(aquarium_drive_t** drives_ref, size_t* drives_len_ref);
 void aquarium_drives_free(aquarium_drive_t* drives, size_t drives_len);
 aquarium_drive_t* aquarium_drives_find(aquarium_drive_t* drives, size_t drives_len, char const* provider);

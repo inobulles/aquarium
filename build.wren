@@ -13,6 +13,7 @@ cc.add_opt("-L/usr/local/lib")
 cc.add_opt("-fPIC")
 cc.add_opt("-Wall")
 cc.add_opt("-Wextra")
+cc.add_opt("-Isrc/lib/include")
 
 var lib_src = File.list("src/lib")
 	.where { |path| path.endsWith(".c") }

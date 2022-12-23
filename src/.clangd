@@ -4,7 +4,8 @@ CompileFlags:
     - -Wall
     - -Wextra
     - -I/usr/local/include
-    - -I.
+    - -I/home/obiwac/aquarium/src
+    - -I/home/obiwac/aquarium/src/lib/include
 Diagnostics:
   UnusedIncludes: Strict
   ClangTidy:

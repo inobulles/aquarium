@@ -1,5 +1,4 @@
-// #include <aquarium.h>
-#include "../aquarium.h"
+#include <aquarium.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -18,7 +17,7 @@ static char* target = NULL;
 
 // actions
 
-static int do_list(void) {
+static int do_list(__attribute__((unused)) aquarium_opts_t* opts) {
 	aquarium_drive_t* drives = NULL;
 	size_t drives_len = 0;
 
@@ -33,7 +32,7 @@ static int do_list(void) {
 	return EXIT_SUCCESS;
 }
 
-static int do_install(void) {
+static int do_install(aquarium_opts_t* opts) {
 	if (!target) {
 		usage();
 	}
@@ -55,7 +54,7 @@ static int do_install(void) {
 
 	// create partition table on target
 
-	if (aquarium_format_new_table(drive) < 0) {
+	if (aquarium_format_new_table(opts, drive) < 0) {
 		return EXIT_FAILURE;
 	}
 
@@ -68,9 +67,15 @@ static int do_install(void) {
 
 // main function
 
-typedef int (*action_t) (void);
+typedef int (*action_t) (aquarium_opts_t* opts);
 
 int main(int argc, char* argv[]) {
+	aquarium_opts_t* opts = aquarium_opts_create();
+
+	if (!opts) {
+		return EXIT_FAILURE;
+	}
+
 	action_t action = do_list;
 
 	// parse options
@@ -91,5 +96,5 @@ int main(int argc, char* argv[]) {
 	argc -= optind;
 	argv += optind;
 
-	return action();
+	return action(opts);
 }

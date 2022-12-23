@@ -1,5 +1,4 @@
-// #include <aquarium.h>
-#include "../aquarium.h"
+#include <aquarium.h>
 #include <err.h>
 #include <errno.h>
 #include <geom/geom_ctl.h>
@@ -11,6 +10,8 @@
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
+
+#include <libzfs.h>
 
 #define ESP_ALIGN 4096 // 4k boundary
 #define ZFS_ALIGN (1024 * 1024) // 1m boundary
@@ -323,6 +324,8 @@ int aquarium_format_create_esp(aquarium_opts_t* opts, aquarium_drive_t* drive, c
 		goto populate_err;
 	}
 
+	// success
+
 	rv = 0;
 
 populate_err:
@@ -344,6 +347,144 @@ name_err:
 	return rv;
 }
 
+static zpool_handle_t* create_zfs_pool(libzfs_handle_t* handle, char const* name, char const* part, char const* mountpoint) {
+	// % zpool create $name $part
+
+	zpool_handle_t* pool_handle = NULL;
+
+	char zfs_dev_path[256];
+	snprintf(zfs_dev_path, sizeof zfs_dev_path, "/dev/%s", part);
+
+#define ADD_PROP(vdev, err, type, k, ...) \
+	if (nvlist_add_##type((vdev), (k), __VA_ARGS__) < 0) { \
+		warnx("nvlist_add_" #type ": k = '%s'", k); \
+		goto err; \
+	}
+
+	// create a vdev (analogous to a physical partition)
+
+	nvlist_t* vdev;
+
+	if (nvlist_alloc(&vdev, NV_UNIQUE_NAME, 0) < 0) {
+		warnx("nvlist_alloc: Failed to allocate vdev nvlist");
+		goto vdev_alloc_err;
+	}
+
+	ADD_PROP(vdev, vdev_err, string, ZPOOL_CONFIG_TYPE, VDEV_TYPE_DISK);
+	ADD_PROP(vdev, vdev_err, string, ZPOOL_CONFIG_PATH, zfs_dev_path);
+	ADD_PROP(vdev, vdev_err, uint64, ZPOOL_CONFIG_WHOLE_DISK, 0);
+
+	// create final root nvlist
+	// main reference for constructing this nvlist was 'sys/contrib/openzfs/cmd/zpool/zpool_vdev.c', 'construct_spec' & 'make_leaf_vdev'
+	// no vdevs for spares or l2cache, so no need to add them to the nvlist
+
+	nvlist_t* root;
+
+	if (nvlist_alloc(&root, NV_UNIQUE_NAME, 0) < 0) {
+		warnx("nvlist_alloc: Failed to allocate root nvlist");
+		goto root_alloc_err;
+	}
+
+	ADD_PROP(root, root_err, string, ZPOOL_CONFIG_TYPE, VDEV_TYPE_ROOT);
+	ADD_PROP(root, root_err, nvlist_array, ZPOOL_CONFIG_CHILDREN, &vdev, 1);
+
+	// give the pool itself some properties
+
+	nvlist_t* pool;
+
+	if (nvlist_alloc(&pool, NV_UNIQUE_NAME, 0) < 0) {
+		warnx("nvlist_alloc: Failed to allocate pool nvlist");
+		goto pool_alloc_err;
+	}
+
+	ADD_PROP(pool, pool_err, string, zpool_prop_to_name(ZPOOL_PROP_ALTROOT), mountpoint);
+
+	// yeah, all that was to create the arguments for calling the pool creation function with a single vdev lmao
+	// the two last 'NULL' arguments are more nvlists for extra properties which we don't need for now
+
+	if (zpool_create(handle, name, root, pool, NULL) < 0) {
+		warn("zpool_create(\"%s\")", name);
+		goto pool_create_err;
+	}
+
+	pool_handle = zpool_open(handle, name);
+
+	if (!pool_handle) {
+		warn("zpool_open(\"%s\")", name);
+		goto pool_open_err;
+	}
+
+	// success
+
+pool_open_err:
+pool_create_err:
+pool_err:
+
+	nvlist_free(pool);
+
+pool_alloc_err:
+root_err:
+
+	nvlist_free(root);
+
+root_alloc_err:
+vdev_err:
+
+	nvlist_free(vdev);
+
+vdev_alloc_err:
+
+	return pool_handle;
+}
+
 int aquarium_format_create_zfs(aquarium_opts_t* opts, aquarium_drive_t* drive, char const* path) {
-	return 0;
+	int rv = -1;
+
+	// ZFS should be the second partition
+
+	char* name = part_name_from_i(drive, 1);
+
+	if (!name) {
+		goto name_err;
+	}
+
+	// create ZFS handle n stuff
+
+	libzfs_handle_t* handle = libzfs_init();
+
+	if (!handle) {
+		warnx("libzfs_init");
+		goto zfs_init_err;
+	}
+
+	libzfs_print_on_error(handle, true);
+
+	// create ZFS pool
+
+	char* mountpoint;
+	assert(!asprintf(&mountpoint, "%s/mnt", path));
+
+	zpool_handle_t* const pool_handle = create_zfs_pool(handle, opts->rootfs_label, name, mountpoint);
+
+	if (!pool_handle) {
+		goto zfs_pool_err;
+	}
+
+	// success
+
+	rv = 0;
+
+	zpool_close(pool_handle);
+
+zfs_pool_err:
+
+	libzfs_fini(handle);
+
+zfs_init_err:
+
+	free(name);
+
+name_err:
+
+	return rv;
 }

@@ -1,5 +1,4 @@
-// #include <aquarium.h>
-#include "../aquarium.h"
+#include <aquarium.h>
 #include "copyfile.h"
 #include <err.h>
 #include <errno.h>

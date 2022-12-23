@@ -326,8 +326,20 @@ static int create_img(aquarium_opts_t* opts, char const* path, char const* out) 
 }
 
 int aquarium_img_out(aquarium_opts_t* opts, char const* path, char const* out) {
-	// TODO make sure aquarium is unmounted, once I've implemented all the entering stuff
-	// TODO check the OS is actually supported
+	aquarium_os_info_t os = aquarium_os_info(path);
+
+	// check the OS is actually supported
+
+	if (os != AQUARIUM_OS_FREEBSD) {
+		warnx("Aquarium OS is unsupported (%d, only FreeBSD aquariums are currently supported)", os);
+		return -1;
+	}
+
+	// make sure everything is unmounted
+
+	if (aquarium_enter_setdown(path, os) < 0) {
+		return -1;
+	}
 
 	// add necessary entries to fstab
 

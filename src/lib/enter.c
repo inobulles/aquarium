@@ -5,19 +5,20 @@
 #include <fcntl.h>
 #include <fs/devfs/devfs.h>
 #include <jail.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioccom.h>
 #include <sys/param.h>
 #include <sys/jail.h>
 #include <sys/procctl.h>
+#include <sys/stat.h>
 #include <sys/uio.h>
 #include <sys/mount.h>
 #include <unistd.h>
 
 #define TRY_UMOUNT(mountpoint) \
-	if (unmount((mountpoint), 0) < 0) { \
-		warnx("unmount(\"" mountpoint "\"): %s", strerror(errno)); \
+	if (recursive_umount((mountpoint)) < 0) { \
 		rv = -1; \
 	}
 
@@ -26,6 +27,53 @@
 	jailparam_import(&args[args_len], (val)); \
 	\
 	args_len++;
+
+static int is_mountpoint(char* path) {
+	struct stat sb;
+
+	// get the device id of the path
+
+	if (stat(path, &sb) < 0) {
+		warnx("stat(\"%s\"): %s", path, strerror(errno));
+		return -1;
+	}
+
+	int const inside_id = sb.st_dev;
+
+	// get the device id of the parent of that path
+
+	if (stat(".", &sb) < 0) {
+		warnx("stat(\".\"): %s", strerror(errno));
+		return -1;
+	}
+
+	int const outside_id = sb.st_dev;
+
+	// if the id's are different, we have ourselves a mountpoint
+
+	return inside_id != outside_id;
+}
+
+static int recursive_umount(char* path) {
+	// loop, trying to unmount until we either get an error, or the path isn't a mountpoint anymore
+
+	for (;;) {
+		int mountpoint = is_mountpoint(path);
+
+		if (mountpoint < 0) {
+			return -1;
+		}
+
+		if (!mountpoint) {
+			return 0;
+		}
+
+		if (unmount(path, 0) < 0) {
+			warnx("unmount(\"%s\"): %s", path, strerror(errno));
+			return -1;
+		}
+	}
+}
 
 static int devfs_ruleset(void) {
 	int rv = -1;

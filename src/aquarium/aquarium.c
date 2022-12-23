@@ -1,80 +1,14 @@
 // #include <aquarium.h>
 #include "../aquarium.h"
-
-// includes
-
+#include "archive.h"
+#include "archive_entry.h"
+#include "copyfile.h"
 #include <dirent.h>
+#include <err.h>
 #include <errno.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include <fcntl.h>
 #include <string.h>
 #include <unistd.h>
-
-#include <err.h>
-#include <fcntl.h>
-#include <grp.h>
-#include <paths.h>
-#include <pwd.h>
-
-#include <sys/param.h>
-
-#include <sys/ioctl.h>
-#include <sys/jail.h>
-#include <sys/linker.h>
-#include <sys/mount.h>
-#include <sys/procctl.h>
-#include <sys/uio.h>
-
-// TODO the two following headers are necessary for 'fetch.h' but are not included
-//      most likely a bug, fix this
-
-#include <sys/param.h>
-#include <time.h>
-
-#include <archive.h>
-#include <archive_entry.h>
-#include <copyfile.h>
-#include <jail.h>
-#include <fetch.h>
-
-#include <fs/devfs/devfs.h>
-#include <openssl/sha.h>
-
-// defines
-
-#define STONERS_GROUP "stoners"
-
-#define DEFAULT_BASE_PATH "/etc/aquariums/"
-
-#define TEMPLATES_PATH "templates/"
-#define KERNELS_PATH   "kernels/"
-#define AQUARIUMS_PATH "aquariums/"
-
-#define ILLEGAL_TEMPLATE_PREFIX '.'
-
-#define SANCTIONED_TEMPLATES "templates_remote"
-#define AQUARIUM_DB_PATH     "aquarium_db"
-
-#define PROGRESS_FREQUENCY  (1 << 22)
-#define FETCH_CHUNK_BYTES   (1 << 16)
-#define ARCHIVE_CHUNK_BYTES (1 << 16)
-
-// macros
-
-#define IOV(name, val) \
-	(struct iovec) { .iov_base = (name), .iov_len = strlen((name)) + 1 }, \
-	(struct iovec) { .iov_base = (val ), .iov_len = strlen((val )) + 1 }
-
-#define JAILPARAM(key, val) \
-	jailparam_init  (&args[args_len], (key)); \
-	jailparam_import(&args[args_len], (val)); \
-	\
-	args_len++;
-
-// options
-
-static gid_t stoners_gid = 0;
 
 static char** copy_args = NULL;
 static size_t copy_args_len = 0;
@@ -170,18 +104,6 @@ static int do_list_templates(aquarium_opts_t* opts) {
 	return EXIT_SUCCESS;
 }
 
-// creating aquariums (takes in a template name):
-//  - check if template exists (and also kernel template if specified)
-//  - open pointer file for writing
-//  - setuid root
-//  - extract template (and kernel template if specified) in the aquarium's directory if it exists
-//  - if it doesn't (they don't), first download it (them), and compare SHA256 hash to a database of trusted templates (and kernel templates if specified) to make sure there isn't anything weird going on
-//  - create user and stuff
-//  - do any final setup (e.g. copying '/etc/resolv.conf' for networking)
-//  - write path of pointer file & its associated aquarium to aquarium database (and give it some unique ID)
-//  - setuid user (CHECK FOR ERRORS!)
-//  - write unique ID to pointer file
-
 static int do_create(aquarium_opts_t* opts) {
 	if (!path) {
 		usage();
@@ -194,37 +116,13 @@ static int do_create(aquarium_opts_t* opts) {
 	return EXIT_SUCCESS;
 }
 
-// entering aquariums (takes in a pointer file):
-//  - make sure the path of the pointer file is well the one contained in the relevant entry of the aquarium database
-//  - mount necessary filesystems (linsysfs, linprocfs, &c)
-//  - link (or bind mount) necessary directories (/dev, /tmp if specified, &c)
-//  - actually enter the aquarium
-
 static int enter_cb(__attribute__((unused)) void* param) {
-	pid_t pid = fork();
+	// unfortunately we kinda need to use execlp here
+	// different OS' may have different locations for the 'env' binary
+	// we use it instead of starting the shell directly to clear any environment variables that we shouldn't have access to (and which anyway isn't super relevant to us)
 
-	if (pid < 0) {
-		warnx("fork: %s", strerror(errno));
-		return -1;
-	}
-
-	if (!pid) {
-		// unfortunately we kinda need to use execlp here
-		// different OS' may have different locations for the 'env' binary
-		// we use it instead of starting the shell directly to clear any environment variables that we shouldn't have access to (and which anyway isn't super relevant to us)
-
-		execlp("env", "env", "-i", "sh", NULL);
-		_exit(EXIT_FAILURE);
-	}
-
-	int const child_rv = __aquarium_wait_for_process(pid);
-
-	if (child_rv != EXIT_SUCCESS) {
-		warnx("Child process exited with error code %d", child_rv);
-		return -1;
-	}
-
-	return 0;
+	execlp("env", "env", "-i", "sh", NULL);
+	_exit(EXIT_FAILURE);
 }
 
 static int do_enter(aquarium_opts_t* opts) {
@@ -240,11 +138,6 @@ static int do_enter(aquarium_opts_t* opts) {
 
 	return EXIT_SUCCESS;
 }
-
-// sweeping aquariums (takes in nothing):
-//  - go through aquarium database
-//  - if a valid pointer file doesn't exist at the path in the database, we say the aquarium has been "orphaned"
-//  - if an aquarium is orphaned, we can safely delete it and remove it from the aquarium database
 
 static int do_sweep(aquarium_opts_t* opts) {
 	return aquarium_sweep(opts) < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
@@ -382,7 +275,7 @@ static int do_out(aquarium_opts_t* opts) {
 		}
 
 		ssize_t len;
-		char buf[ARCHIVE_CHUNK_BYTES];
+		char buf[4096]; // TODO ARCHIVE_CHUNK_BYTES
 
 		while ((len = read(fd, buf, sizeof buf)) > 0) {
 			archive_write_data(archive, buf, len);
@@ -403,15 +296,6 @@ static int do_out(aquarium_opts_t* opts) {
 
 	return EXIT_SUCCESS;
 }
-
-// outputting aquariums as images
-//  - check the OS we're tryna create an image of is actually supported (i.e. is FreeBSD)
-//  - make sure '/etc/fstab' is setup correctly to mount the rootfs & ESP (EFI System Partition)
-//  - generate entropy
-//  - create UFS2 rootfs image with the contents of the aquarium
-//  - create ESP image (FAT12 - UEFI code seems to be fussy with FAT32 partitions generated by FreeBSD) with the EFI loader
-//  - combine all that together into a final image, which uses the GPT partition scheme (and also installs gptboot(8) in the MBR boot sector for BIOS booting on legacy systems - something aquabsd-installer should be doing too!)
-// TODO a lot of these things need to be added to aquabsd-installer
 
 static int do_img_out(aquarium_opts_t* opts) {
 	if (!out_path) {
@@ -490,6 +374,10 @@ int main(int argc, char* argv[]) {
 	action_t action = do_list;
 	aquarium_opts_t* opts = aquarium_opts_create();
 
+	if (!opts) {
+		return EXIT_FAILURE;
+	}
+
 	// parse options
 
 	int c;
@@ -502,7 +390,7 @@ int main(int argc, char* argv[]) {
 		}
 
 		else if (c == 'r') {
-			opts->base_path = optarg;
+			aquarium_opts_set_base_path(opts, optarg);
 		}
 
 		else if (c == 'v') {
@@ -575,51 +463,9 @@ int main(int argc, char* argv[]) {
 		usage();
 	}
 
-	// generate various paths relative to the base path
-	// we don't really care about freeing these
-	// TODO there should really be facilities in libaquarium for this
-
-	asprintf(&opts->templates_path,  "%s/" TEMPLATES_PATH,       opts->base_path);
-	asprintf(&opts->kernels_path,    "%s/" KERNELS_PATH,         opts->base_path);
-	asprintf(&opts->aquariums_path,  "%s/" AQUARIUMS_PATH,       opts->base_path);
-
-	asprintf(&opts->sanctioned_path, "%s/" SANCTIONED_TEMPLATES, opts->base_path);
-	asprintf(&opts->db_path,         "%s/" AQUARIUM_DB_PATH,     opts->base_path);
-
-	// skip this stuff if we're root
-	// note that aquariums created as root won't be accessible by members of the stoners group
-
-	uid_t uid = getuid();
-
-	if (!uid) {
-		goto okay;
+	if (aquarium_create_struct(opts) < 0) {
+		return EXIT_FAILURE;
 	}
-
-	// make sure the $STONERS_GROUP group exists, and error if not
-
-	struct group* stoners_group = getgrnam(STONERS_GROUP);
-
-	if (!stoners_group) {
-		errx(EXIT_FAILURE, "Couldn't find \"" STONERS_GROUP "\" group");
-	}
-
-	stoners_gid = stoners_group->gr_gid;
-	endgrent();
-
-	// make sure user is part of the $STONERS_GROUP group
-
-	struct passwd* passwd = getpwuid(uid);
-	char** stoners = stoners_group->gr_mem;
-
-	while (*stoners) {
-		if (!strcmp(*stoners++, passwd->pw_name)) {
-			goto okay;
-		}
-	}
-
-	errx(EXIT_FAILURE, "%s is not part of the \"" STONERS_GROUP "\" group", passwd->pw_name);
-
-okay:
 
 	// finally actually execute the action we were here for
 

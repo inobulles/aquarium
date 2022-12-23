@@ -3,18 +3,17 @@
 #include <dirent.h>
 #include <err.h>
 #include <errno.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 static int remove_aquarium(char* path) {
 	// first, make sure all possible mounted filesystems are unmounted
+	// if this fails, try to remove things anyway
 
 	aquarium_os_t const os = aquarium_os_info(path);
-
-	if (aquarium_enter_setdown(path, os) < 0) {
-		return -1;
-	}
+	int rv = aquarium_enter_setdown(path, os);
 
 	// then, we remove all the aquarium files
 	// the aquarium may have already been deleted (e.g. by a nosy user)
@@ -35,7 +34,7 @@ static int remove_aquarium(char* path) {
 	}
 
 	__aquarium_wait_for_process(pid);
-	return 0;
+	return rv;
 }
 
 int aquarium_sweep(aquarium_opts_t* opts) {
@@ -70,9 +69,7 @@ int aquarium_sweep(aquarium_opts_t* opts) {
 		// if we can't find pointer file, remove the aquarium and that entry from the aquarium database
 
 		if (access(ent.pointer_path, F_OK) < 0) {
-			if (remove_aquarium(ent.aquarium_path) < 0) {
-				goto remove_err;
-			}
+			remove_aquarium(ent.aquarium_path);
 
 			// discard this entry obviously, we don't want nuffin to do with it no more 😡
 
@@ -137,11 +134,7 @@ int aquarium_sweep(aquarium_opts_t* opts) {
 		char* aquarium_path;
 		asprintf(&aquarium_path, "%s/%s", opts->aquariums_path, name);
 
-		if (remove_aquarium(aquarium_path)) {
-			free(aquarium_path);
-			goto remove2_err;
-		}
-
+		remove_aquarium(aquarium_path);
 		free(aquarium_path);
 
 	found:
@@ -160,12 +153,9 @@ int aquarium_sweep(aquarium_opts_t* opts) {
 
 	rv = 0;
 
-remove2_err:
-
 	closedir(dp);
 
 opendir_err:
-remove_err:
 
 	for (size_t i = 0; i < survivors_len; i++) {
 		aquarium_db_ent_t* const survivor = &survivors[i];

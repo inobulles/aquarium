@@ -266,6 +266,8 @@ static int freebsd_setdown(void) {
 
 	TRY_UMOUNT("proc")
 	TRY_UMOUNT("dev/fd")
+	TRY_UMOUNT("dev")
+	TRY_UMOUNT("tmp")
 
 	return rv;
 }
@@ -277,6 +279,8 @@ static int linux_setdown(void) {
 	TRY_UMOUNT("proc")
 	TRY_UMOUNT("dev/fd")
 	TRY_UMOUNT("dev/shm")
+	TRY_UMOUNT("dev")
+	TRY_UMOUNT("tmp")
 
 	return rv;
 }

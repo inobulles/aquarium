@@ -246,188 +246,8 @@ static int do_enter(aquarium_opts_t* opts) {
 //  - if a valid pointer file doesn't exist at the path in the database, we say the aquarium has been "orphaned"
 //  - if an aquarium is orphaned, we can safely delete it and remove it from the aquarium database
 
-static void __unmount_aquarium(char* aquarium_path) {
-	#define GEN(prefix, name) \
-		char* name; \
-		asprintf(&name, "%s/" #name, prefix);
-
-	GEN(aquarium_path, dev)
-	GEN(dev, fd)
-	GEN(dev, shm)
-
-	GEN(aquarium_path, proc)
-	GEN(aquarium_path, sys)
-	GEN(aquarium_path, tmp)
-
-	// we do as many iterations as we need, because some filesystems may be mounted over others
-
-	do {
-		while (!unmount(fd,  MNT_FORCE));
-		while (!unmount(shm, MNT_FORCE));
-	}   while (!unmount(dev, MNT_FORCE));
-
-	while (!unmount(proc, MNT_FORCE));
-	while (!unmount(sys,  MNT_FORCE));
-	while (!unmount(tmp,  MNT_FORCE));
-
-	#undef GEN
-
-	free(dev);
-	free(fd);
-	free(shm);
-
-	free(proc);
-	free(sys);
-	free(tmp);
-}
-
-static void __remove_aquarium(char* aquarium_path) {
-	// first, make sure all possible mounted filesystems are unmounted
-
-	__unmount_aquarium(aquarium_path);
-
-	// then, we remove all the aquarium files
-	// the aquarium may have already been deleted (e.g. by a nosy user)
-	// so we don't wanna do anything with the return value of '__wait_for_process'
-	// TODO I desperately need some easy API for removing files in the standard library on aquaBSD
-	//      I'm not (I hope) dumb enough to do something like 'asprint(&cmd, "rm -rf %s", ent.aquarium_path)', but I know damn well other developers would be tempted to do such a thing given no other alternative
-
-	pid_t rm_pid = fork();
-
-	if (!rm_pid) {
-		execl("/bin/rm", "/bin/rm", "-rf", aquarium_path, NULL);
-		_exit(EXIT_FAILURE);
-	}
-
-	__aquarium_wait_for_process(rm_pid);
-}
-
 static int do_sweep(aquarium_opts_t* opts) {
-	// list of database entries which survive the sweep
-
-	size_t survivors_len = 0;
-	aquarium_db_ent_t* survivors = NULL;
-
-	// go through aquarium database
-
-	FILE* fp = fopen(opts->db_path, "r");
-
-	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for reading: %s", opts->db_path, strerror(errno));
-	}
-
-	char buf[1024];
-	aquarium_db_ent_t ent;
-
-	while (aquarium_db_next_ent(opts, &ent, sizeof buf, buf, fp, false)) {
-		// if something went wrong reading an entry (e.g. it's malformed), simply discard it
-		// there is a chance then that some aquariums or pointer files will be left behind, but eh rather that than risk deleting something we shouldn't
-		// also, under normal operation, this kind of condition shouldn't occur
-
-		if (!ent.pointer_path || !ent.aquarium_path) {
-			continue;
-		}
-
-		// if we can't find pointer file, remove the aquarium and that entry from the aquarium database
-
-		if (access(ent.pointer_path, F_OK) < 0) {
-			__remove_aquarium(ent.aquarium_path);
-
-			// discard this entry obviously, we don't want nuffin to do with it no more 😡
-
-			continue;
-		}
-
-		// if we can't find aquarium, remove the pointer file and that entry from the aquarium database
-		// not sure under which circumstances this kind of stuff could happen, but handle it anyway
-
-		if (access(ent.aquarium_path, F_OK) < 0) {
-			// attempt to remove the pointer file
-			// we don't care to do anything on error, because the file may very well have already been removed by the user
-
-			remove(ent.pointer_path);
-
-			// discard this entry &c &c
-
-			continue;
-		}
-
-		// congratulations to the database entry! 🎉
-		// it has survived unto the next sweep!
-
-		survivors = realloc(survivors, (survivors_len + 1) * sizeof *survivors);
-		aquarium_db_ent_t* survivor = &survivors[survivors_len++];
-
-		survivor->pointer_path  = strdup(ent.pointer_path);
-		survivor->aquarium_path = strdup(ent.aquarium_path);
-	}
-
-	fclose(fp);
-
-	// keep things nice and clean is to go through everything under /etc/aquariums/aquariums and see which aquariums were never "recensés" (censused?)
-
-	DIR* dp = opendir(opts->aquariums_path);
-
-	if (!dp) {
-		errx(EXIT_FAILURE, "opendir: %s", strerror(errno));
-	}
-
-	struct dirent* dir_ent;
-
-	while ((dir_ent = readdir(dp))) {
-		char* name = dir_ent->d_name;
-
-		if (!strcmp(name, ".") || !strcmp(name, "..")) {
-			continue;
-		}
-
-		for (size_t i = 0; i < survivors_len; i++) {
-			aquarium_db_ent_t* survivor = &survivors[i];
-			char* aquarium = strrchr(survivor->aquarium_path, '/');
-
-			aquarium += !!*aquarium;
-
-			if (!strcmp(aquarium, name)) {
-				goto found;
-			}
-		}
-
-		// ah! couldn't find the aquarium in the list of survivors! remove it!
-
-		char* aquarium_path;
-		asprintf(&aquarium_path, "%s/%s", opts->aquariums_path, name);
-
-		__remove_aquarium(aquarium_path);
-		free(aquarium_path);
-
-	found:
-
-		continue; // need something after a label in C for some reason
-	}
-
-	closedir(dp);
-
-	// last thing to do is rebuild new aquarium database file with the entries that survived
-
-	/* FILE* */ fp = fopen(opts->db_path, "w");
-
-	if (!fp) {
-		errx(EXIT_FAILURE, "fopen: failed to open %s for writing: %s", opts->db_path, strerror(errno));
-	}
-
-	for (size_t i = 0; i < survivors_len; i++) {
-		aquarium_db_ent_t* survivor = &survivors[i];
-
-		fprintf(fp, "%s:%s\n", survivor->pointer_path, survivor->aquarium_path);
-
-		free(survivor->pointer_path);
-		free(survivor->aquarium_path);
-	}
-
-	fclose(fp);
-	free(survivors);
-
-	return 0;
+	return aquarium_sweep(opts) < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
 // outputting aquariums (TODO: much of this code can be shared with do_enter)
@@ -472,8 +292,17 @@ static int do_out(aquarium_opts_t* opts) {
 		usage();
 	}
 
-	char* aquarium_path = aquarium_db_read_pointer_file(opts, path);
-	__unmount_aquarium(aquarium_path);
+	char* const aquarium_path = aquarium_db_read_pointer_file(opts, path);
+
+	if (!aquarium_path) {
+		return EXIT_FAILURE;
+	}
+
+	aquarium_os_t const os = aquarium_os_info(aquarium_path);
+
+	if (aquarium_enter_setdown(aquarium_path, os) < 0) {
+		return EXIT_FAILURE;
+	}
 
 	// create template
 

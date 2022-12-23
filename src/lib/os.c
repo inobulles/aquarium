@@ -25,7 +25,7 @@ aquarium_os_t aquarium_os_info(char const* _path) {
 	}
 
 	if (!fp) {
-		return AQUARIUM_OS_GENERIC;
+		return AQUARIUM_OS_FREEBSD; // TODO NOOOO!!
 	}
 
 	char buf[1024];

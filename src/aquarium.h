@@ -93,6 +93,8 @@ typedef int (*aquarium_enter_cb_t) (void* param);
 aquarium_opts_t* aquarium_opts_create(void);
 void aquarium_opts_free(aquarium_opts_t* opts);
 
+void aquarium_opts_set_base_path(aquarium_opts_t* opts, char const* base_path);
+
 bool aquarium_db_next_ent(aquarium_opts_t* opts, aquarium_db_ent_t* ent, size_t buf_len, char buf[buf_len], FILE* fp, bool be_dramatic);
 char* aquarium_db_read_pointer_file(aquarium_opts_t* opts, char const* path);
 

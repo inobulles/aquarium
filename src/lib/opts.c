@@ -125,3 +125,25 @@ void aquarium_opts_free(aquarium_opts_t* opts) {
 
 	free(opts);
 }
+
+void aquarium_opts_set_base_path(aquarium_opts_t* opts, char const* base_path) {
+	// directory paths
+
+	free(opts->base_path);
+	free(opts->templates_path);
+	free(opts->kernels_path);
+	free(opts->aquariums_path);
+
+	opts->base_path = strdup(base_path);
+	if (asprintf(&opts->templates_path, "%s/" TEMPLATES_PATH, opts->base_path)) {}
+	if (asprintf(&opts->kernels_path,   "%s/" KERNELS_PATH,   opts->base_path)) {}
+	if (asprintf(&opts->aquariums_path, "%s/" AQUARIUMS_PATH, opts->base_path)) {}
+
+	// file paths
+
+	free(opts->sanctioned_path);
+	free(opts->db_path);
+
+	if (asprintf(&opts->sanctioned_path, "%s/" SANCTIONED_PATH, opts->base_path)) {}
+	if (asprintf(&opts->db_path,         "%s/" DB_PATH,         opts->base_path)) {}
+}

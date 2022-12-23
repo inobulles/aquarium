@@ -7,7 +7,7 @@
 #include <sys/param.h>
 #include <sys/linker.h>
 
-aquarium_os_info_t aquarium_os_info(char const* _path) {
+aquarium_os_t aquarium_os_info(char const* _path) {
 	// this method of retrieving OS info relies on the existence of an '/etc/os-release' file on the installation
 	// all officially supported OS' for aquariums should have this file, else they'll simply be reported as 'OS_GENERIC'
 	// if 'path == NULL', assume we're already in the aquarium, and just use the relative path for '/etc/os-release'

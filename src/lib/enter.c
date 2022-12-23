@@ -237,7 +237,7 @@ static int ubuntu_setdown(void) {
 	return linux_setdown();
 }
 
-int aquarium_enter_setdown(char const* path, aquarium_os_info_t os) {
+int aquarium_enter_setdown(char const* path, aquarium_os_t os) {
 	int rv = -1;
 
 	// remember our current working directory
@@ -343,7 +343,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 
 	// OS-specific actions
 
-	aquarium_os_info_t const os = aquarium_os_info(NULL);
+	aquarium_os_t const os = aquarium_os_info(NULL);
 
 	if (os == AQUARIUM_OS_FREEBSD && freebsd_setup() < 0) {
 		goto os_setup_err;

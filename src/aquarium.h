@@ -18,7 +18,7 @@ typedef enum {
 	AQUARIUM_OS_GENERIC,
 	AQUARIUM_OS_FREEBSD,
 	AQUARIUM_OS_UBUNTU,
-} aquarium_os_info_t;
+} aquarium_os_t;
 
 typedef enum {
 	AQUARIUM_TEMPLATE_KIND_BASE,
@@ -99,13 +99,13 @@ char* aquarium_db_read_pointer_file(aquarium_opts_t* opts, char const* path);
 int aquarium_download_template(aquarium_opts_t* opts, char const* path, char const* name, aquarium_template_kind_t kind);
 int aquarium_extract_template(aquarium_opts_t* opts, char const* path, char const* name, aquarium_template_kind_t kind);
 
-aquarium_os_info_t aquarium_os_info(char const* path);
+aquarium_os_t aquarium_os_info(char const* path);
 int aquarium_os_load_linux64_kmod(void);
 
 int aquarium_create(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template);
 
 int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t cb, void* param);
-int aquarium_enter_setdown(char const* path, aquarium_os_info_t os);
+int aquarium_enter_setdown(char const* path, aquarium_os_t os);
 
 int aquarium_drives_read(aquarium_drive_t** drives_ref, size_t* drives_len_ref);
 void aquarium_drives_free(aquarium_drive_t* drives, size_t drives_len);

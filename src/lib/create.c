@@ -183,7 +183,7 @@ static int config(aquarium_opts_t* opts, char* path) {
 
 	// create OS-specific setup script
 
-	aquarium_os_info_t const os = aquarium_os_info(path);
+	aquarium_os_t const os = aquarium_os_info(path);
 	char* setup_script = "";
 
 	if (os == AQUARIUM_OS_FREEBSD && !(setup_script = setup_script_freebsd(name))) {

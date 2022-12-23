@@ -326,7 +326,7 @@ static int create_img(aquarium_opts_t* opts, char const* path, char const* out) 
 }
 
 int aquarium_img_out(aquarium_opts_t* opts, char const* path, char const* out) {
-	aquarium_os_info_t os = aquarium_os_info(path);
+	aquarium_os_t const os = aquarium_os_info(path);
 
 	// check the OS is actually supported
 

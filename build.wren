@@ -33,11 +33,11 @@ src
 var linker = Linker.new(cc)
 
 linker.archive(lib_src.toList, "libaquarium.a")
-linker.link(lib_src.toList, ["archive", "copyfile", "crypto", "fetch", "geom", "jail", "mkfs_msdos", "pkg", "zfs"], "libaquarium.so", true)
+linker.link(lib_src.toList, ["archive", "copyfile", "crypto", "fetch", "geom", "jail", "mkfs_msdos", "zfs"], "libaquarium.so", true)
 
 // create aquarium command-line frontend
 
-linker.link(aquarium_src.toList, ["aquarium", "archive", "copyfile", "crypto", "fetch", "jail"], "aquarium")
+linker.link(aquarium_src.toList, ["aquarium", "archive", "copyfile"], "aquarium")
 
 // create installer command-line frontend
 

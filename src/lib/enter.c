@@ -237,10 +237,11 @@ static int ubuntu_setdown(void) {
 	return linux_setdown();
 }
 
-int aquarium_enter(aquarium_opts_t* opts, char const* path) {
+int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t cb, void* param) {
 	int rv = -1;
 
-	// remember our current working directory for later
+	// remember our current working directory
+	// this is in case there's an error before we can attach to the jail
 
 	char* const cwd = getcwd(NULL, 0);
 
@@ -339,6 +340,9 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path) {
 
 	int const jid = jail_getid(hash);
 
+	struct jailparam args[16] = { 0 };
+	size_t args_len = 0;
+
 	if (jid >= 0) {
 		if (jail_attach(jid) < 0) {
 			warnx("jail_attach(%d): %s", jid, strerror(errno));
@@ -355,9 +359,6 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path) {
 	if (!hostname) {
 		hostname = (void*) path;
 	}
-
-	struct jailparam args[16] = { 0 };
-	size_t args_len = 0;
 
 	JAILPARAM("name", hash)
 	JAILPARAM("path", path)
@@ -385,19 +386,23 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path) {
 		goto jailparam_set_err;
 	}
 
-	jailparam_free(args, args_len);
-
 	// we're now inside of the aquarium
 
 inside:
 
-	printf("inside aquarium!\n"); // TODO callback to shit that happens while we're in the aquarium
+	if (cb(param) < 0) {
+		goto cb_err;
+	}
 
 	// success
 
 	rv = 0;
 
+cb_err:
 jailparam_set_err:
+
+	jailparam_free(args, args_len);
+
 early_jail_attach_err:
 
 	free(hash);

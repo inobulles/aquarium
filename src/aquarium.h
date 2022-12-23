@@ -4,6 +4,7 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -83,6 +84,10 @@ typedef struct {
 	char* label;
 } aquarium_drive_t;
 
+// other typedefs
+
+typedef int (*aquarium_enter_cb_t) (void* param);
+
 // function prototypes
 
 aquarium_opts_t* aquarium_opts_create(void);
@@ -99,7 +104,7 @@ int aquarium_os_load_linux64_kmod(void);
 
 int aquarium_create(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template);
 
-int aquarium_enter(aquarium_opts_t* opts, char const* path);
+int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t cb, void* param);
 
 int aquarium_drives_read(aquarium_drive_t** drives_ref, size_t* drives_len_ref);
 void aquarium_drives_free(aquarium_drive_t* drives, size_t drives_len);
@@ -122,14 +127,14 @@ __attribute__((unused)) static int __aquarium_wait_for_process(pid_t pid) {
 	while (waitpid(pid, &wstatus, 0) > 0);
 
 	if (WIFSIGNALED(wstatus)) {
-		return -1;
+		return EXIT_FAILURE;
 	}
 
 	if (WIFEXITED(wstatus)) {
 		return WEXITSTATUS(wstatus);
 	}
 
-	return -1;
+	return EXIT_FAILURE;
 }
 
 __attribute__((unused)) static char* __aquarium_hash(char const* _str) { // djb2 algorithm

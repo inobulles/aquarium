@@ -223,7 +223,7 @@ static int create_esp(aquarium_opts_t* opts, char const* path) {
 
 	int const child_rv = __aquarium_wait_for_process(pid);
 
-	if (child_rv < 0) {
+	if (child_rv != EXIT_SUCCESS) {
 		warnx("Child ESP image creation process exited with error code %d", child_rv);
 		goto create_esp_err;
 	}
@@ -270,7 +270,7 @@ static int create_rootfs(aquarium_opts_t* opts, char const* path) {
 
 	int child_rv = __aquarium_wait_for_process(pid);
 
-	if (child_rv < 0) {
+	if (child_rv != EXIT_SUCCESS) {
 		warnx("Child rootfs image creation process exited with error code %d", child_rv);
 		return -1;
 	}
@@ -317,7 +317,7 @@ static int create_img(aquarium_opts_t* opts, char const* path, char const* out) 
 
 	int child_rv = __aquarium_wait_for_process(pid);
 
-	if (child_rv < 0) {
+	if (child_rv != EXIT_SUCCESS) {
 		warnx("Child final bootable image creation process exited with error code %d", child_rv);
 		return -1;
 	}

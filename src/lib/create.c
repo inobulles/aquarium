@@ -136,7 +136,31 @@ static char* setup_script_ubuntu(char* hostname) {
 	return script;
 }
 
-static int config(char* path) {
+static int setup_enter_cb(void* param) {
+	char* script = param;
+	pid_t pid = fork();
+
+	if (pid < 0) {
+		warnx("fork: %s", strerror(errno));
+		return -1;
+	}
+
+	if (!pid) {
+		execl("/bin/sh", "/bin/sh", "-c", script, NULL);
+		_exit(EXIT_FAILURE);
+	}
+
+	int const child_rv = __aquarium_wait_for_process(pid);
+
+	if (child_rv != EXIT_SUCCESS) {
+		warnx("Child setup script process exited with error code %d", child_rv);
+		return -1;
+	}
+
+	return 0;
+}
+
+static int config(aquarium_opts_t* opts, char* path) {
 	// copy over /etc/resolv.conf so we don't have to use DHCP when using the host's interface
 
 	if (copyfile("/etc/resolv.conf", "etc/resolv.conf", 0, COPYFILE_ALL) < 0) {
@@ -170,9 +194,36 @@ static int config(char* path) {
 		goto setup_script_err;
 	}
 
+	// enter the jail in a separate process & run that script
+
+	pid_t pid = fork();
+
+	if (pid < 0) {
+		warnx("fork: %s", strerror(errno));
+		goto fork_err;
+	}
+
+	if (!pid) {
+		if (aquarium_enter(opts, path, setup_enter_cb, setup_script) < 0) {
+			_exit(EXIT_FAILURE);
+		}
+
+		_exit(EXIT_SUCCESS);
+	}
+
+	int const child_rv = __aquarium_wait_for_process(pid);
+
+	if (child_rv != EXIT_SUCCESS) {
+		warnx("Child configuration process exited with error code %d", child_rv);
+		goto enter_err;
+	}
+
 	// success
 
 	rv = 0;
+
+enter_err:
+fork_err:
 
 	free(setup_script);
 
@@ -295,7 +346,7 @@ int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const*
 
 	// configure the newly created aquarium
 
-	if (config(path) < 0) {
+	if (config(opts, path) < 0) {
 		goto config_err;
 	}
 

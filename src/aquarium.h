@@ -56,6 +56,11 @@ typedef struct {
 	char* esp_label;
 	char* esp_oem;
 	char* esp_vol_label;
+
+	// jail options
+
+	bool persist;
+	bool vnet_disable;
 } aquarium_opts_t;
 
 typedef struct {
@@ -125,4 +130,16 @@ __attribute__((unused)) static int __aquarium_wait_for_process(pid_t pid) {
 	}
 
 	return -1;
+}
+
+__attribute__((unused)) static char* __aquarium_hash(char const* _str) { // djb2 algorithm
+	char* str = (void*) _str;
+	uint64_t hash = 5381;
+
+	while (*str) {
+		hash = ((hash << 5) + hash) + *str++;
+	}
+
+	asprintf(&str, "aquarium-%lx", hash);
+	return str;
 }

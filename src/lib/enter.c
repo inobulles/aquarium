@@ -4,9 +4,13 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <fs/devfs/devfs.h>
+#include <jail.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioccom.h>
+#include <sys/param.h>
+#include <sys/jail.h>
+#include <sys/procctl.h>
 #include <sys/uio.h>
 #include <sys/mount.h>
 #include <unistd.h>
@@ -16,6 +20,12 @@
 		warnx("unmount(\"" mountpoint "\"): %s", strerror(errno)); \
 		rv = -1; \
 	}
+
+#define JAILPARAM(key, val) \
+	jailparam_init  (&args[args_len], (key)); \
+	jailparam_import(&args[args_len], (val)); \
+	\
+	args_len++;
 
 static int devfs_ruleset(void) {
 	int rv = -1;
@@ -302,11 +312,101 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path) {
 		goto devfs_ruleset_err;
 	}
 
-	// TODO callback to shit that happens while we're in the aquarium
+	// actually enter the aquarium
+	// PROC_NO_NEW_PRIVS_ENABLE is only available in aquaBSD and FreeBSD-CURRENT: https://reviews.freebsd.org/D30939
+
+#if __FreeBSD_version >= 1400026
+	int flag = PROC_NO_NEW_PRIVS_ENABLE;
+
+	if (procctl(P_PID, getpid(), PROC_NO_NEW_PRIVS_CTL, &flag) < 0) {
+		warnx("procctl: %s", strerror(errno));
+		goto procctl_err;
+	}
+#endif
+
+	// find aquarium path hash
+	// this is what's used to refer to the aquarium's jail by name
+
+	char* const hash = __aquarium_hash(path);
+
+	if (!hash) {
+		warnx("Failed to hash '%s'", path);
+		goto hash_err;
+	}
+
+	// attempt to get the jail ID
+	// if found, we can skip the jail creation step & attach ourselves to it right away
+
+	int const jid = jail_getid(hash);
+
+	if (jid >= 0) {
+		if (jail_attach(jid) < 0) {
+			warnx("jail_attach(%d): %s", jid, strerror(errno));
+			goto early_jail_attach_err;
+		}
+
+		goto inside;
+	}
+
+	// create the jail
+
+	char* hostname = strrchr(path, '/');
+
+	if (!hostname) {
+		hostname = (void*) path;
+	}
+
+	struct jailparam args[16] = { 0 };
+	size_t args_len = 0;
+
+	JAILPARAM("name", hash)
+	JAILPARAM("path", path)
+	JAILPARAM("host.hostname", hostname)
+	JAILPARAM("allow.mount", "false")
+	JAILPARAM("allow.mount.devfs", "false")
+	JAILPARAM("allow.raw_sockets", "true") // to allow us to send ICMP packets (for ping)
+	JAILPARAM("allow.socket_af", "true")
+
+	if (!opts->vnet_disable) {
+		JAILPARAM("vnet", NULL)
+	}
+
+	else {
+		JAILPARAM("ip4", "inherit")
+		JAILPARAM("ip6", "inherit")
+	}
+
+	if (opts->persist) {
+		JAILPARAM("persist", NULL)
+	}
+
+	if (jailparam_set(args, args_len, JAIL_CREATE | JAIL_ATTACH) < 0) {
+		warnx("jailparam_set: %s (%s)", strerror(errno), jail_errmsg);
+		goto jailparam_set_err;
+	}
+
+	jailparam_free(args, args_len);
+
+	// we're now inside of the aquarium
+
+inside:
+
+	printf("inside aquarium!\n"); // TODO callback to shit that happens while we're in the aquarium
 
 	// success
 
 	rv = 0;
+
+jailparam_set_err:
+early_jail_attach_err:
+
+	free(hash);
+
+hash_err:
+
+#if __FreeBSD_version >= 1400026
+procctl_err:
+#endif
 
 devfs_ruleset_err:
 

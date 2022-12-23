@@ -49,6 +49,11 @@ aquarium_opts_t* aquarium_opts_create(void) {
 	opts->esp_oem       = strdup(ESP_OEM      );
 	opts->esp_vol_label = strdup(ESP_VOL_LABEL);
 
+	// jail options
+
+	opts->persist = false;
+	opts->vnet_disable = false;
+
 	// skip this stuff if we're root
 	// note that aquariums created as root won't be accessible by members of the stoners group
 

@@ -1,7 +1,11 @@
 // #include <aquarium.h>
 #include "../aquarium.h" 
+#include <err.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/param.h>
+#include <sys/linker.h>
 
 aquarium_os_info_t aquarium_os_info(char const* _path) {
 	// this method of retrieving OS info relies on the existence of an '/etc/os-release' file on the installation
@@ -43,4 +47,28 @@ aquarium_os_info_t aquarium_os_info(char const* _path) {
 	}
 
 	return AQUARIUM_OS_GENERIC;
+}
+
+static int load_kmod(char const* name) {
+	if (!kldload(name)) {
+		return 0;
+	}
+
+	if (errno == EEXIST) {
+		return 0;
+	}
+
+	// jammer, iets is fout gegaan
+
+	if (errno == ENOEXEC) {
+		warnx("kldload(\"%s\"): please check dmesg(8) for details (or don't, I'm not your mum)", name);
+		return -1;
+	}
+
+	warnx("kldload(\"%s\"): %s", name, strerror(errno));
+	return -1;
+}
+
+int aquarium_os_load_linux64_kmod(void) {
+	return load_kmod("linux64");
 }

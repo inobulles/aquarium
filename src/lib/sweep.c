@@ -42,11 +42,11 @@ int aquarium_sweep(aquarium_opts_t* opts) {
 
 	// go through aquarium database
 
-	FILE* const fp = fopen(opts->db_path, "w+");
+	FILE* const read_fp = fopen(opts->db_path, "r");
 
-	if (!fp) {
+	if (!read_fp) {
 		warnx("fopen(\"%s\"): %s", opts->db_path, strerror(errno));
-		goto open_err;
+		goto open_read_err;
 	}
 
 	// list of database entries which survive the sweep
@@ -57,7 +57,7 @@ int aquarium_sweep(aquarium_opts_t* opts) {
 	char buf[1024];
 	aquarium_db_ent_t ent;
 
-	while (aquarium_db_next_ent(opts, &ent, sizeof buf, buf, fp, false)) {
+	while (aquarium_db_next_ent(opts, &ent, sizeof buf, buf, read_fp, false)) {
 		// if something went wrong reading an entry (e.g. it's malformed), simply discard it
 		// there is a chance then that some aquariums or pointer files will be left behind, but eh rather that than risk deleting something we shouldn't
 		// also, under normal operation, this kind of condition shouldn't occur
@@ -144,14 +144,25 @@ int aquarium_sweep(aquarium_opts_t* opts) {
 
 	// last thing to do is rebuild new aquarium database file with the entries that survived
 
+	FILE* const write_fp = fopen(opts->db_path, "w");
+
+	if (!write_fp) {
+		warnx("fopen(\"%s\"): %s", opts->db_path, strerror(errno));
+		goto open_write_err;
+	}
+
 	for (size_t i = 0; i < survivors_len; i++) {
 		aquarium_db_ent_t* const survivor = &survivors[i];
-		fprintf(fp, "%s:%s\n", survivor->pointer_path, survivor->aquarium_path);
+		fprintf(write_fp, "%s:%s\n", survivor->pointer_path, survivor->aquarium_path);
 	}
 
 	// success
 
 	rv = 0;
+
+	fclose(write_fp);
+
+open_write_err:
 
 	closedir(dp);
 
@@ -168,9 +179,9 @@ opendir_err:
 		free(survivors);
 	}
 
-	fclose(fp);
+	fclose(read_fp);
 
-open_err:
+open_read_err:
 
 	return rv;
 }

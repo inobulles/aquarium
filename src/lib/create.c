@@ -138,26 +138,9 @@ static char* setup_script_ubuntu(char* hostname) {
 
 static int setup_enter_cb(void* param) {
 	char* script = param;
-	pid_t pid = fork();
 
-	if (pid < 0) {
-		warnx("fork: %s", strerror(errno));
-		return -1;
-	}
-
-	if (!pid) {
-		execl("/bin/sh", "/bin/sh", "-c", script, NULL);
-		_exit(EXIT_FAILURE);
-	}
-
-	int const child_rv = __aquarium_wait_for_process(pid);
-
-	if (child_rv != EXIT_SUCCESS) {
-		warnx("Child setup script process exited with error code %d", child_rv);
-		return -1;
-	}
-
-	return 0;
+	execl("/bin/sh", "/bin/sh", "-c", script, NULL);
+	_exit(EXIT_FAILURE);
 }
 
 static int config(aquarium_opts_t* opts, char* path) {
@@ -260,7 +243,7 @@ int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const*
 	// generate final aquarium path
 
 	char* _path;
-	if (asprintf(&_path, "%s%s-XXXXXXX", opts->aquariums_path, template)) {}
+	if (asprintf(&_path, "%s/%s-XXXXXXX", opts->aquariums_path, template)) {}
 
 	char* const path = strdup(_path);
 

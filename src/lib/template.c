@@ -235,7 +235,7 @@ found: {}
 	// create path for temporary file
 
 	char* temp_path;
-	asprintf(&temp_path, "%s%c%s.txz", path, AQUARIUM_ILLEGAL_TEMPLATE_PREFIX, sanctioned.name);
+	asprintf(&temp_path, "%s/%c%s.txz", path, AQUARIUM_ILLEGAL_TEMPLATE_PREFIX, sanctioned.name);
 
 	// found template, start downloading it
 
@@ -300,7 +300,7 @@ int aquarium_extract_template(aquarium_opts_t* opts, char const* path, char cons
 	// attempt to download & check it if it don't already exist
 
 	char* template_path;
-	if (asprintf(&template_path, "%s%s.txz", search_path, name)) {}
+	if (asprintf(&template_path, "%s/%s.txz", search_path, name)) {}
 
 	if (access(template_path, F_OK) < 0) {
 		if (aquarium_download_template(opts, search_path, name, kind) < 0) {

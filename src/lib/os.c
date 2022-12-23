@@ -11,6 +11,7 @@ aquarium_os_t aquarium_os_info(char const* _path) {
 	// this method of retrieving OS info relies on the existence of an '/etc/os-release' file on the installation
 	// all officially supported OS' for aquariums should have this file, else they'll simply be reported as 'OS_GENERIC'
 	// if 'path == NULL', assume we're already in the aquarium, and just use the relative path for '/etc/os-release'
+	// TODO find a better way of detecting OS', because this isn't gonna cut it
 
 	char* path = "etc/os-release";
 
@@ -25,7 +26,7 @@ aquarium_os_t aquarium_os_info(char const* _path) {
 	}
 
 	if (!fp) {
-		return AQUARIUM_OS_GENERIC;
+		return AQUARIUM_OS_FREEBSD; // AQUARIUM_OS_GENERIC;
 	}
 
 	char buf[1024];
@@ -46,7 +47,7 @@ aquarium_os_t aquarium_os_info(char const* _path) {
 		return AQUARIUM_OS_UBUNTU;
 	}
 
-	return AQUARIUM_OS_GENERIC;
+	return AQUARIUM_OS_FREEBSD; // AQUARIUM_OS_GENERIC;
 }
 
 static int load_kmod(char const* name) {

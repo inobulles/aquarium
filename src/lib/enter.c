@@ -18,7 +18,7 @@
 #include <unistd.h>
 
 #define TRY_UMOUNT(mountpoint) \
-	if (recursive_umount((mountpoint)) < 0) { \
+	if (!access((mountpoint), F_OK) && recursive_umount((mountpoint)) < 0) { \
 		rv = -1; \
 	}
 
@@ -42,11 +42,17 @@ static int is_mountpoint(char* path) {
 
 	// get the device id of the parent of that path
 
-	if (stat(".", &sb) < 0) {
-		warnx("stat(\".\"): %s", strerror(errno));
+	char* parent;
+	if (asprintf(&parent, "%s/..", path)) {}
+
+	if (stat(parent, &sb) < 0) {
+		warnx("stat(\"%s\"): %s", parent, strerror(errno));
+
+		free(parent);
 		return -1;
 	}
 
+	free(parent);
 	int const outside_id = sb.st_dev;
 
 	// if the id's are different, we have ourselves a mountpoint
@@ -500,7 +506,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 
 	inside:
 
-		if (cb(param) < 0) {
+		if (!opts->persist && cb(param) < 0) {
 			_exit(EXIT_FAILURE);
 		}
 

@@ -7,6 +7,7 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -464,6 +465,10 @@ int main(int argc, char* argv[]) {
 	}
 
 	if (aquarium_create_struct(opts) < 0) {
+		return EXIT_FAILURE;
+	}
+
+	if (aquarium_sweep(opts) < 0) {
 		return EXIT_FAILURE;
 	}
 

@@ -103,7 +103,11 @@ int aquarium_format_create_esp(aquarium_opts_t* opts, aquarium_drive_t* drive, c
 int aquarium_img_populate_esp(char const* path, char const* stage);
 int aquarium_img_out(aquarium_opts_t* opts, char const* path, char const* out);
 
-// internal functions common to all source files
+// internal macros & functions common to all source files
+
+#define __AQUARIUM_IOV(name, val) \
+	(struct iovec) { .iov_base = (name), .iov_len = strlen((name)) + 1 }, \
+	(struct iovec) { .iov_base = (val ), .iov_len = strlen((val )) + 1 }
 
 __attribute__((unused)) static int __aquarium_wait_for_process(pid_t pid) {
 	int wstatus = 0;

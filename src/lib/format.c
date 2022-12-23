@@ -15,10 +15,6 @@
 
 #define MIN_FAT32_CLUSTERS 66581
 
-#define IOV(name, val) \
-	(struct iovec) { .iov_base = (name), .iov_len = strlen((name)) + 1 }, \
-	(struct iovec) { .iov_base = (val ), .iov_len = strlen((val )) + 1 }
-
 static uint64_t align(x, bound) {
 	return x + bound - (x - 1) % bound - 1;
 }
@@ -269,10 +265,10 @@ int aquarium_format_create_esp(aquarium_opts_t* opts, aquarium_drive_t* drive, c
 	if (asprintf(&mountpoint, "%s/boot/efi", path)) {}
 
 	struct iovec iov[] = {
-		IOV("fstype", "msdosfs"),
-		IOV("fspath", mountpoint),
-		IOV("from", esp_dev_path),
-		IOV("longnames", ""),
+		__AQUARIUM_IOV("fstype", "msdosfs"),
+		__AQUARIUM_IOV("fspath", mountpoint),
+		__AQUARIUM_IOV("from", esp_dev_path),
+		__AQUARIUM_IOV("longnames", ""),
 	};
 
 	if (nmount(iov, sizeof(iov) / sizeof(*iov), 0) < 0) {

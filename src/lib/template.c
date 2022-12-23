@@ -257,8 +257,8 @@ found: {}
 	char* final_path;
 	asprintf(&final_path, "%s/%s.txz", path, sanctioned.name);
 
-	if (rename(path, final_path) < 0) {
-		warnx("rename: failed to rename %s to %s: %s", path, final_path, strerror(errno));
+	if (rename(temp_path, final_path) < 0) {
+		warnx("rename: failed to rename %s to %s: %s", temp_path, final_path, strerror(errno));
 		goto rename_err;
 	}
 
@@ -312,7 +312,7 @@ int aquarium_extract_template(aquarium_opts_t* opts, char const* path, char cons
 	// as per archive_write_disk(3)'s "BUGS" section, we mustn't call 'chdir' between opening and closing archive objects
 
 	if (chdir(path) < 0) {
-		warnx("chdir: %s", strerror(errno));
+		warnx("chdir(\"%s\"): %s", path, strerror(errno));
 		goto chdir_err;
 	}
 

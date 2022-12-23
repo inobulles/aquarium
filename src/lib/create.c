@@ -261,10 +261,9 @@ int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const*
 	char* _path;
 	if (asprintf(&_path, "%s%s-XXXXXXX", opts->aquariums_path, template)) {}
 
-	char* const path = mkdtemp(_path);
-	free(_path);
+	char* const path = strdup(_path);
 
-	if (!path) {
+	if (!mkdtemp(path)) {
 		warnx("mkdtemp(\"%s\"): failed to create aquarium directory: %s", _path, strerror(errno));
 		goto mkdtemp_err;
 	}
@@ -405,9 +404,9 @@ abs_path_err:
 creat_err:
 pointer_file_exists_err:
 
-	free(path);
-
 mkdtemp_err:
+
+	free(path);
 
 	if (chdir(cwd) < 0) {
 		warnx("chdir(\"%s\"): %s", cwd, strerror(errno));

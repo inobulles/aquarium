@@ -178,9 +178,8 @@ static int create_esp(aquarium_opts_t* opts, char const* path) {
 	// create ESP stage
 
 	char* stage = strdup("/tmp/aquarium-esp-stage-XXXXXXX");
-	stage = mkdtemp(stage);
 
-	if (!stage) {
+	if (!mkdtemp(stage)) {
 		warnx("mkdtemp: failed to create ESP staging directory: %s", strerror(errno));
 		goto mkdtemp_err;
 	}

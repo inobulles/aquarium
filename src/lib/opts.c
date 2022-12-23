@@ -69,6 +69,9 @@ aquarium_opts_t* aquarium_opts_create(void) {
 
 	if (!stoners_group) {
 		warnx("Couldn't find \"" STONERS_GROUP "\" group");
+
+		free(opts);
+		return NULL;
 	}
 
 	opts->stoners_gid = stoners_group->gr_gid;
@@ -86,6 +89,9 @@ aquarium_opts_t* aquarium_opts_create(void) {
 	}
 
 	warnx("%s is not part of the \"" STONERS_GROUP "\" group", passwd->pw_name);
+
+	free(opts);
+	return NULL;
 
 ok:
 

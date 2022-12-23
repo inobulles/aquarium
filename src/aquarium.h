@@ -102,6 +102,7 @@ int aquarium_extract_template(aquarium_opts_t* opts, char const* path, char cons
 aquarium_os_t aquarium_os_info(char const* path);
 int aquarium_os_load_linux64_kmod(void);
 
+int aquarium_create_struct(aquarium_opts_t* opts);
 int aquarium_create(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template);
 
 int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t cb, void* param);

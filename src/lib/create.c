@@ -12,7 +12,7 @@
 #include <unistd.h>
 #include <copyfile.h>
 
-static int ensure_struct(aquarium_opts_t* opts) {
+int aquarium_create_struct(aquarium_opts_t* opts) {
 	int rv = -1;
 
 	// build filestructure if it doesn't yet exist for convenience
@@ -241,12 +241,6 @@ setup_script_err:
 
 int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const* template, char const* kernel_template) {
 	int rv = -1;
-
-	// make sure aquarium structure exists
-
-	if (ensure_struct(opts) < 0) {
-		return -1;
-	}
 
 	// make sure our template is legal
 

@@ -105,6 +105,7 @@ int aquarium_os_load_linux64_kmod(void);
 int aquarium_create(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template);
 
 int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t cb, void* param);
+int aquarium_enter_setdown(char const* path, aquarium_os_info_t os);
 
 int aquarium_drives_read(aquarium_drive_t** drives_ref, size_t* drives_len_ref);
 void aquarium_drives_free(aquarium_drive_t* drives, size_t drives_len);

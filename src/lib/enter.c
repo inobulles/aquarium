@@ -237,6 +237,53 @@ static int ubuntu_setdown(void) {
 	return linux_setdown();
 }
 
+int aquarium_enter_setdown(char const* path, aquarium_os_info_t os) {
+	int rv = -1;
+
+	// remember our current working directory
+
+	char* const cwd = getcwd(NULL, 0);
+
+	if (!cwd) {
+		warnx("getcwd: %s", strerror(errno));
+		goto getcwd_err;
+	}
+
+	// change into the aquarium directory
+
+	if (chdir(path) < 0) {
+		warnx("chdir(\"%s\"): %s", path, strerror(errno));
+		goto chdir_err;
+	}
+
+	if (os == AQUARIUM_OS_FREEBSD && freebsd_setdown() < 0) {
+		goto setdown_err;
+	}
+
+	if (os == AQUARIUM_OS_UBUNTU && ubuntu_setdown() < 0) {
+		goto setdown_err;
+	}
+
+	// success
+
+	rv = 0;
+
+setdown_err:
+
+	if (chdir(cwd) < 0) {
+		warnx("chdir(\"%s\"): %s", cwd, strerror(errno));
+		rv = -1;
+	}
+
+chdir_err:
+
+	free(cwd);
+
+getcwd_err:
+
+	return rv;
+}
+
 int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t cb, void* param) {
 	int rv = -1;
 
@@ -415,11 +462,7 @@ procctl_err:
 
 devfs_ruleset_err:
 
-	if (os == AQUARIUM_OS_FREEBSD && freebsd_setdown() < 0) {
-		rv = -1;
-	}
-
-	if (os == AQUARIUM_OS_UBUNTU && ubuntu_setdown() < 0) {
+	if (aquarium_enter_setdown(path, os) < 0) {
 		rv = -1;
 	}
 

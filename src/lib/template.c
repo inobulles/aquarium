@@ -61,12 +61,15 @@ static int fetch_template(sanctioned_t* sanctioned, char const* path, SHA256_CTX
 	uint8_t chunk[FETCH_CHUNK_BYTES];
 	size_t chunk_bytes;
 
+	*total_ref = 0;
+
 	while ((chunk_bytes = fread(chunk, 1, sizeof chunk, remote_fp)) > 0) {
 		*total_ref += chunk_bytes;
 
 		if (!(*total_ref % PROGRESS_FREQUENCY)) {
 			float progress = (float) *total_ref / sanctioned->bytes;
-			printf("Downloading %f%% done\r", progress * 100);
+			printf("\rDownloading %d%% done", (int) (progress * 100));
+			fflush(stdout);
 		}
 
 		SHA256_Update(sha_context, chunk, chunk_bytes);
@@ -76,7 +79,7 @@ static int fetch_template(sanctioned_t* sanctioned, char const* path, SHA256_CTX
 		}
 	}
 
-	printf("Finished\n");
+	printf("\rFinished             \n");
 
 	// success
 

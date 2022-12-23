@@ -11,6 +11,12 @@
 #include <sys/mount.h>
 #include <unistd.h>
 
+#define TRY_UMOUNT(mountpoint) \
+	if (unmount((mountpoint), 0) < 0) { \
+		warnx("unmount(\"" mountpoint "\"): %s", strerror(errno)); \
+		rv = -1; \
+	}
+
 static int devfs_ruleset(void) {
 	int rv = -1;
 
@@ -64,12 +70,161 @@ open_err:
 	return rv;
 }
 
-static int ubuntu_setup(void) {
+// OS-specific setup functions
+
+static int linux_setup(void) {
+	if (aquarium_os_load_linux64_kmod() < 0) {
+		goto load_kmod_err;
+	}
+
+	// mount /dev/shm as tmpfs
+	// on linux, this needs to have mode 1777
+	// ignore ENOENT, because we may be prevented from mounting by the devfs ruleset
+
+	struct iovec iov_shm[] = {
+		__AQUARIUM_IOV("fstype", "tmpfs"),
+		__AQUARIUM_IOV("fspath", "dev/shm"),
+		__AQUARIUM_IOV("mode", "1777"),
+	};
+
+	if (nmount(iov_shm, sizeof(iov_shm) / sizeof(*iov_shm), 0) < 0 && errno != ENOENT) {
+		warnx("nmount: failed to mount shm tmpfs: %s", strerror(errno));
+		goto mount_shm_err;
+	}
+
+	// mount fdescfs (with linrdlnk)
+	// ignore ENOENT, because we may be prevented from mounting by the devfs ruleset
+
+	struct iovec iov_fd[] = {
+		__AQUARIUM_IOV("fstype", "fdescfs"),
+		__AQUARIUM_IOV("fspath", "dev/fd"),
+		__AQUARIUM_IOV("linrdlnk", ""),
+	};
+
+	if (nmount(iov_fd, sizeof(iov_fd) / sizeof(*iov_fd), 0) < 0 && errno != ENOENT) {
+		warnx("nmount: failed to mount fdescfs: %s", strerror(errno));
+		goto mount_fd_err;
+	}
+
+	// mount linprocfs
+
+	struct iovec iov_proc[] = {
+		__AQUARIUM_IOV("fstype", "linprocfs"),
+		__AQUARIUM_IOV("fspath", "proc"),
+	};
+
+	if (nmount(iov_proc, sizeof(iov_proc) / sizeof(*iov_proc), 0) < 0) {
+		warnx("nmount: failed to mount linprocfs: %s", strerror(errno));
+		goto mount_proc_err;
+	}
+
+	// mount linsysfs
+
+	struct iovec iov_sys[] = {
+		__AQUARIUM_IOV("fstype", "linsysfs"),
+		__AQUARIUM_IOV("fspath", "sys"),
+	};
+
+	if (nmount(iov_sys, sizeof(iov_sys) / sizeof(*iov_sys), 0) < 0) {
+		warnx("nmount: failed to mount linsysfs: %s", strerror(errno));
+		goto mount_sys_err;
+	}
+
+	// success
+
 	return 0;
+
+	__attribute__((unused)) int rv; // dummy variable for TRY_UMOUNT macro
+	TRY_UMOUNT("sys")
+
+mount_sys_err:
+
+	TRY_UMOUNT("proc")
+
+mount_proc_err:
+
+	TRY_UMOUNT("dev/fd")
+
+mount_fd_err:
+
+	TRY_UMOUNT("dev/shm")
+
+mount_shm_err:
+load_kmod_err:
+
+	return -1;
+}
+
+static int ubuntu_setup(void) {
+	return linux_setup();
 }
 
 static int freebsd_setup(void) {
+	// mount fdescfs
+	// ignore ENOENT, because we may be prevented from mounting by the devfs ruleset
+
+	struct iovec iov_fd[] = {
+		__AQUARIUM_IOV("fstype", "fdescfs"),
+		__AQUARIUM_IOV("fspath", "dev/fd"),
+	};
+
+	if (nmount(iov_fd, sizeof(iov_fd) / sizeof(*iov_fd), 0) < 0 && errno != ENOENT) {
+		warnx("nmount: failed to mount fdescfs: %s", strerror(errno));
+		goto mount_fd_err;
+	}
+
+	// mount procfs
+
+	struct iovec iov_proc[] = {
+		__AQUARIUM_IOV("fstype", "procfs"),
+		__AQUARIUM_IOV("fspath", "proc"),
+	};
+
+	if (nmount(iov_proc, sizeof(iov_proc) / sizeof(*iov_proc), 0) < 0) {
+		warnx("nmount: failed to mount procfs: %s", strerror(errno));
+		goto mount_proc_err;
+	}
+
+	// success
+
 	return 0;
+
+	__attribute__((unused)) int rv; // dummy variable for TRY_UMOUNT macro
+	TRY_UMOUNT("proc")
+
+mount_proc_err:
+
+	TRY_UMOUNT("dev/fd")
+
+mount_fd_err:
+
+	return -1;
+}
+
+// OS-specific setdown (lol) functions
+
+static int linux_setdown(void) {
+	int rv = 0;
+
+	TRY_UMOUNT("sys")
+	TRY_UMOUNT("proc")
+	TRY_UMOUNT("dev/fd")
+	TRY_UMOUNT("dev/shm")
+
+	return rv;
+}
+
+static int ubuntu_setdown(void) {
+	return linux_setdown();
+}
+
+static int freebsd_setdown(void) {
+	int rv = 0;
+
+	TRY_UMOUNT("proc")
+	TRY_UMOUNT("dev/fd")
+
+	return rv;
 }
 
 int aquarium_enter(aquarium_opts_t* opts, char const* path) {
@@ -130,7 +285,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path) {
 
 	// OS-specific actions
 
-	aquarium_os_info_t os = aquarium_os_info(NULL);
+	aquarium_os_info_t const os = aquarium_os_info(NULL);
 
 	if (os == AQUARIUM_OS_UBUNTU && ubuntu_setup() < 0) {
 		goto os_setup_err;
@@ -138,10 +293,6 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path) {
 
 	if (os == AQUARIUM_OS_FREEBSD && freebsd_setup() < 0) {
 		goto os_setup_err;
-	}
-
-	else if (os == AQUARIUM_OS_FREEBSD) {
-
 	}
 
 	// set the correct ruleset for devfs
@@ -159,18 +310,21 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path) {
 
 devfs_ruleset_err:
 
-	if (unmount("dev", 0) < 0) {
-		warnx("unmount(\"dev\"): %s", strerror(errno));
+	if (os == AQUARIUM_OS_UBUNTU && ubuntu_setdown() < 0) {
+		rv = -1;
+	}
+
+	if (os == AQUARIUM_OS_FREEBSD && freebsd_setdown() < 0) {
 		rv = -1;
 	}
 
 os_setup_err:
+
+	TRY_UMOUNT("dev")
+
 mount_devfs_err:
 
-	if (unmount("tmp", 0) < 0) {
-		warnx("unmount(\"tmp\"): %s", strerror(errno));
-		rv = -1;
-	}
+	TRY_UMOUNT("tmp")
 
 mount_tmpfs_err:
 

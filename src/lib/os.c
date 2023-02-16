@@ -38,11 +38,11 @@ aquarium_os_t aquarium_os_info(char const* _path) {
 
 	// match NAME with an OS we know of
 
-	if (!strcmp(os, "FreeBSD")) {
+	if (!strstr(os, "FreeBSD")) {
 		return AQUARIUM_OS_FREEBSD;
 	}
 
-	if (!strcmp(os, "Ubuntu")) {
+	if (!strstr(os, "Ubuntu")) {
 		return AQUARIUM_OS_UBUNTU;
 	}
 

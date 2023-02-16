@@ -428,7 +428,7 @@ typedef int (*action_t) (aquarium_opts_t* opts);
 
 int main(int argc, char* argv[]) {
 	action_t action = do_list;
-	aquarium_opts_t* opts = aquarium_opts_create();
+	aquarium_opts_t* const opts = aquarium_opts_create();
 
 	if (!opts) {
 		return EXIT_FAILURE;

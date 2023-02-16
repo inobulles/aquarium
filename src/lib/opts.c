@@ -7,10 +7,10 @@
 #include <unistd.h>
 
 #define STONERS_GROUP "stoners"
+#define BASE_PATH "/etc/aquariums"
 
 // directory paths
 
-#define BASE_PATH      "/etc/aquariums"
 #define TEMPLATES_PATH "templates"
 #define KERNELS_PATH   "kernels"
 #define AQUARIUMS_PATH "aquariums"
@@ -27,20 +27,19 @@
 #define ESP_OEM       "AQUABSD "
 #define ESP_VOL_LABEL "AQUABSD-ESP"
 
+// useful macros
+
+#define TRY_FREE(str) \
+	if ((str)) { \
+		free((str)); \
+	}
+
 aquarium_opts_t* aquarium_opts_create(void) {
-	aquarium_opts_t* opts = calloc(1, sizeof *opts);
+	aquarium_opts_t* const opts = calloc(1, sizeof *opts);
 
-	// directory paths
+	// setting the base path automatically sets all the others
 
-	opts->base_path       = strdup(BASE_PATH      );
-	opts->templates_path  = strdup(TEMPLATES_PATH );
-	opts->kernels_path    = strdup(KERNELS_PATH   );
-	opts->aquariums_path  = strdup(AQUARIUMS_PATH );
-
-	// file paths
-
-	opts->sanctioned_path = strdup(KERNELS_PATH   );
-	opts->db_path         = strdup(AQUARIUMS_PATH );
+	aquarium_opts_set_base_path(opts, BASE_PATH);
 
 	// image output & filesystem creation options
 
@@ -99,14 +98,10 @@ ok:
 }
 
 void aquarium_opts_free(aquarium_opts_t* opts) {
-	#define TRY_FREE(str) \
-		if ((str)) { \
-			free((str)); \
-		}
+	TRY_FREE(opts->base_path)
 
 	// directory paths
 
-	TRY_FREE(opts->base_path)
 	TRY_FREE(opts->templates_path)
 	TRY_FREE(opts->kernels_path)
 	TRY_FREE(opts->aquariums_path)
@@ -127,22 +122,23 @@ void aquarium_opts_free(aquarium_opts_t* opts) {
 }
 
 void aquarium_opts_set_base_path(aquarium_opts_t* opts, char const* base_path) {
+	TRY_FREE(opts->base_path)
+	opts->base_path = strdup(base_path);
+
 	// directory paths
 
-	free(opts->base_path);
-	free(opts->templates_path);
-	free(opts->kernels_path);
-	free(opts->aquariums_path);
+	TRY_FREE(opts->templates_path)
+	TRY_FREE(opts->kernels_path)
+	TRY_FREE(opts->aquariums_path)
 
-	opts->base_path = strdup(base_path);
 	if (asprintf(&opts->templates_path, "%s/" TEMPLATES_PATH, opts->base_path)) {}
 	if (asprintf(&opts->kernels_path,   "%s/" KERNELS_PATH,   opts->base_path)) {}
 	if (asprintf(&opts->aquariums_path, "%s/" AQUARIUMS_PATH, opts->base_path)) {}
 
 	// file paths
 
-	free(opts->sanctioned_path);
-	free(opts->db_path);
+	TRY_FREE(opts->sanctioned_path)
+	TRY_FREE(opts->db_path)
 
 	if (asprintf(&opts->sanctioned_path, "%s/" SANCTIONED_PATH, opts->base_path)) {}
 	if (asprintf(&opts->db_path,         "%s/" DB_PATH,         opts->base_path)) {}

@@ -2,6 +2,7 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/queue.h>
 #include <fs/devfs/devfs.h>
 #include <jail.h>
 #include <stdio.h>

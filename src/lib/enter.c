@@ -64,7 +64,7 @@ static int recursive_umount(char* path) {
 	// loop, trying to unmount until we either get an error, or the path isn't a mountpoint anymore
 
 	for (;;) {
-		int mountpoint = is_mountpoint(path);
+		int const mountpoint = is_mountpoint(path);
 
 		if (mountpoint < 0) {
 			return -1;
@@ -74,7 +74,9 @@ static int recursive_umount(char* path) {
 			return 0;
 		}
 
-		if (unmount(path, 0) < 0) {
+		// XXX is there a reason I shouldn't be using 'MNT_FORCE'?
+
+		if (unmount(path, MNT_FORCE) < 0) {
 			warnx("unmount(\"%s\"): %s", path, strerror(errno));
 			return -1;
 		}

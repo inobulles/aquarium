@@ -23,7 +23,7 @@ static void usage(void) {
 	fprintf(stderr,
 		"usage: %1$s [-r base]\n"
 		"       %1$s [-r base] -c path [-t template] [-k kernel_template]\n"
-		"       %1$s [-r base] [-pv] -e path\n"
+		"       %1$s [-r base] [-pv] [-h hostname] -e path\n"
 		"       %1$s [-r base] -i path -o image\n"
 		"       %1$s [-r base] -I drive [-t template] [-k kernel_template]\n"
 		"       %1$s [-r base] -l\n"
@@ -438,10 +438,14 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:e:fi:I:k:lo:pr:st:T:vy:")) != -1) {
+	while ((c = getopt(argc, argv, "c:e:fh:i:I:k:lo:pr:st:T:vy:")) != -1) {
 		// general options
 
-		if (c == 'p') {
+		if (c == 'h') {
+			opts->hostname = optarg;
+		}
+
+		else if (c == 'p') {
 			opts->persist = true;
 		}
 

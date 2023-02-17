@@ -475,13 +475,17 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		// find a hostname for the jail
 		// replace all illegal chars by dashes
 
-		char* hostname = strrchr(path, '/');
+		char* hostname = opts->hostname;
 
 		if (!hostname) {
-			hostname = (void*) path;
+			hostname = strrchr(path, '/');
+			hostname += !!hostname;
 		}
 
-		hostname++;
+		if (!hostname) {
+			hostname = (void*) path; // TODO idk if it makes more sense to default to the path as the hostname or the name the user gave to the aquarium
+		}
+
 		hostname = strdup(hostname); // duplicate so that we don't also modify path (we don't concern ourselves with freeing)
 
 		for (size_t i = 0; i < strlen(hostname); i++) {

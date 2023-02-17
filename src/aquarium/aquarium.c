@@ -176,8 +176,20 @@ static int enter_cb(__attribute__((unused)) void* param) {
 	// unfortunately we kinda need to use execlp here
 	// different OS' may have different locations for the 'env' binary
 	// we use it instead of starting the shell directly to clear any environment variables that we shouldn't have access to (and which anyway isn't super relevant to us)
+	// the one exception is the TERM variable, which we read and then pass on to env
 
-	execlp("env", "env", "-i", "sh", NULL);
+	char* const term_env = getenv("TERM");
+	char* term_arg;
+
+	if (term_env) {
+		if (asprintf(&term_arg, "TERM=%s", term_env)) {} // we don't concern ourselves with freeing this
+	}
+
+	else {
+		term_arg = "";
+	}
+
+	execlp("env", "env", "-i", term_arg, "sh", NULL);
 	_exit(EXIT_FAILURE);
 }
 

@@ -28,6 +28,8 @@
 	\
 	args_len++;
 
+#define ILLEGAL_HOSTNAME_CHAR(h) ((h) == '.' || (h) == ' ' || (h) == '/')
+
 static int is_mountpoint(char* path) {
 	struct stat sb;
 
@@ -213,6 +215,8 @@ static int linux_setup(void) {
 		warnx("nmount: failed to mount fdescfs: %s", strerror(errno));
 		goto mount_fd_err;
 	}
+
+	//
 
 	// mount linprocfs
 
@@ -468,7 +472,8 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 			goto inside;
 		}
 
-		// create the jail
+		// find a hostname for the jail
+		// replace all illegal chars by dashes
 
 		char* hostname = strrchr(path, '/');
 
@@ -477,6 +482,15 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		}
 
 		hostname++;
+		hostname = strdup(hostname); // duplicate so that we don't also modify path (we don't concern ourselves with freeing)
+
+		for (size_t i = 0; i < strlen(hostname); i++) {
+			if (ILLEGAL_HOSTNAME_CHAR(hostname[i])) {
+				hostname[i] = '-';
+			}
+		}
+
+		// create the jail
 
 		JAILPARAM("name", hash)
 		JAILPARAM("path", path)
@@ -507,6 +521,8 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		// we're now inside of the aquarium
 
 	inside:
+
+		// call the passed callback function
 
 		if (!opts->persist && cb(param) < 0) {
 			_exit(EXIT_FAILURE);

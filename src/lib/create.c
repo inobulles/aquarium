@@ -164,6 +164,7 @@ static int config(aquarium_opts_t* opts, char* path) {
 	}
 
 	// create OS-specific setup script
+	// TODO we shouldn't be simply using the name of the aquarium as a hostname
 
 	aquarium_os_t const os = aquarium_os_info(path);
 	char* setup_script = NULL;

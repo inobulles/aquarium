@@ -14,6 +14,8 @@ cc.add_opt("-fPIC")
 cc.add_opt("-Wall")
 cc.add_opt("-Wextra")
 cc.add_opt("-Isrc/lib/include")
+cc.add_opt("-Isrc/.")
+cc.add_opt("-g")
 
 var lib_src = File.list("src/lib")
 	.where { |path| path.endsWith(".c") }

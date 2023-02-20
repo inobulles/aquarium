@@ -23,7 +23,7 @@ static void usage(void) {
 	fprintf(stderr,
 		"usage: %1$s [-r base]\n"
 		"       %1$s [-r base] -c path [-t template] [-k kernel_template]\n"
-		"       %1$s [-r base] [-pv] -e path\n"
+		"       %1$s [-r base] [-pv] [-h hostname] -e path\n"
 		"       %1$s [-r base] -i path -o image\n"
 		"       %1$s [-r base] -I drive [-t template] [-k kernel_template]\n"
 		"       %1$s [-r base] -l\n"
@@ -176,8 +176,20 @@ static int enter_cb(__attribute__((unused)) void* param) {
 	// unfortunately we kinda need to use execlp here
 	// different OS' may have different locations for the 'env' binary
 	// we use it instead of starting the shell directly to clear any environment variables that we shouldn't have access to (and which anyway isn't super relevant to us)
+	// the one exception is the TERM variable, which we read and then pass on to env
 
-	execlp("env", "env", "-i", "sh", NULL);
+	char* const term_env = getenv("TERM");
+	char* term_arg;
+
+	if (term_env) {
+		if (asprintf(&term_arg, "TERM=%s", term_env)) {} // we don't concern ourselves with freeing this
+	}
+
+	else {
+		term_arg = "";
+	}
+
+	execlp("env", "env", "-i", term_arg, "sh", NULL);
 	_exit(EXIT_FAILURE);
 }
 
@@ -428,7 +440,7 @@ typedef int (*action_t) (aquarium_opts_t* opts);
 
 int main(int argc, char* argv[]) {
 	action_t action = do_list;
-	aquarium_opts_t* opts = aquarium_opts_create();
+	aquarium_opts_t* const opts = aquarium_opts_create();
 
 	if (!opts) {
 		return EXIT_FAILURE;
@@ -438,10 +450,14 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:e:fi:I:k:lo:pr:st:T:vy:")) != -1) {
+	while ((c = getopt(argc, argv, "c:e:fh:i:I:k:lo:pr:st:T:vy:")) != -1) {
 		// general options
 
-		if (c == 'p') {
+		if (c == 'h') {
+			opts->hostname = optarg;
+		}
+
+		else if (c == 'p') {
 			opts->persist = true;
 		}
 

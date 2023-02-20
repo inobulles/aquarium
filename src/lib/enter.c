@@ -2,6 +2,7 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/queue.h>
 #include <fs/devfs/devfs.h>
 #include <jail.h>
 #include <stdio.h>
@@ -26,6 +27,8 @@
 	jailparam_import(&args[args_len], (val)); \
 	\
 	args_len++;
+
+#define ILLEGAL_HOSTNAME_CHAR(h) ((h) == '.' || (h) == ' ' || (h) == '/')
 
 static int is_mountpoint(char* path) {
 	struct stat sb;
@@ -63,7 +66,7 @@ static int recursive_umount(char* path) {
 	// loop, trying to unmount until we either get an error, or the path isn't a mountpoint anymore
 
 	for (;;) {
-		int mountpoint = is_mountpoint(path);
+		int const mountpoint = is_mountpoint(path);
 
 		if (mountpoint < 0) {
 			return -1;
@@ -73,7 +76,9 @@ static int recursive_umount(char* path) {
 			return 0;
 		}
 
-		if (unmount(path, 0) < 0) {
+		// XXX is there a reason I shouldn't be using 'MNT_FORCE'?
+
+		if (unmount(path, MNT_FORCE) < 0) {
 			warnx("unmount(\"%s\"): %s", path, strerror(errno));
 			return -1;
 		}
@@ -210,6 +215,8 @@ static int linux_setup(void) {
 		warnx("nmount: failed to mount fdescfs: %s", strerror(errno));
 		goto mount_fd_err;
 	}
+
+	//
 
 	// mount linprocfs
 
@@ -465,15 +472,29 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 			goto inside;
 		}
 
-		// create the jail
+		// find a hostname for the jail
+		// replace all illegal chars by dashes
 
-		char* hostname = strrchr(path, '/');
+		char* hostname = opts->hostname;
 
 		if (!hostname) {
-			hostname = (void*) path;
+			hostname = strrchr(path, '/');
+			hostname += !!hostname;
 		}
 
-		hostname++;
+		if (!hostname) {
+			hostname = (void*) path; // TODO idk if it makes more sense to default to the path as the hostname or the name the user gave to the aquarium
+		}
+
+		hostname = strdup(hostname); // duplicate so that we don't also modify path (we don't concern ourselves with freeing)
+
+		for (size_t i = 0; i < strlen(hostname); i++) {
+			if (ILLEGAL_HOSTNAME_CHAR(hostname[i])) {
+				hostname[i] = '-';
+			}
+		}
+
+		// create the jail
 
 		JAILPARAM("name", hash)
 		JAILPARAM("path", path)
@@ -504,6 +525,8 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		// we're now inside of the aquarium
 
 	inside:
+
+		// call the passed callback function
 
 		if (!opts->persist && cb(param) < 0) {
 			_exit(EXIT_FAILURE);

@@ -60,6 +60,7 @@ typedef struct {
 
 	// jail options
 
+	char* hostname;
 	bool persist;
 	bool vnet_disable;
 } aquarium_opts_t;

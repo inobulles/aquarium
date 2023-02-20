@@ -13,7 +13,7 @@
 static char** copy_args = NULL;
 static size_t copy_args_len = 0;
 
-static char* template = "amd64.aquabsd.0922a";
+static char* template = "amd64.aquabsd.1222a";
 static char* kernel_template = NULL;
 
 static char* out_path = NULL;

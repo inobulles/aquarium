@@ -330,7 +330,7 @@ int aquarium_img_out(aquarium_opts_t* opts, char const* path, char const* out) {
 
 	if (os != AQUARIUM_OS_FREEBSD) {
 		warnx("Aquarium OS is unsupported (%d, only FreeBSD aquariums are currently supported)", os);
-		return -1;
+		// return -1;
 	}
 
 	// make sure everything is unmounted

@@ -101,6 +101,7 @@ char* aquarium_db_read_pointer_file(aquarium_opts_t* opts, char const* path);
 
 int aquarium_download_template(aquarium_opts_t* opts, char const* path, char const* name, aquarium_template_kind_t kind);
 int aquarium_extract_template(aquarium_opts_t* opts, char const* path, char const* name, aquarium_template_kind_t kind);
+int aquarium_template_out(aquarium_opts_t* opts, char const* path, char const* out);
 
 aquarium_os_t aquarium_os_info(char const* path);
 int aquarium_os_load_linux64_kmod(void);

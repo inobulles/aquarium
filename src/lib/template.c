@@ -1,6 +1,9 @@
 #include <aquarium.h>
+#include "archive.h"
+#include "archive_entry.h"
 #include <err.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <openssl/sha.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -374,4 +377,157 @@ download_err:
 	free(template_path);
 
 	return rv;
+}
+
+// template outputting
+
+typedef struct {
+	const char* out;
+	int fd;
+} do_out_state_t;
+
+static int do_out_open_cb(struct archive* archive, void* _state) {
+	(void) archive;
+
+	do_out_state_t* const state = _state;
+
+	state->fd = open(state->out, O_WRONLY | O_CREAT, 0644);
+
+	if (state->fd < 0) {
+		warnx("open(\"%s\"): %s", state->out, strerror(errno));
+		return ARCHIVE_FATAL;
+	}
+
+	return ARCHIVE_OK;
+}
+
+static la_ssize_t do_out_write_cb(struct archive* archive, void* _state, const void* buf, size_t len) {
+	(void) archive;
+
+	do_out_state_t* const state = _state;
+
+	return write(state->fd, buf, len);
+}
+
+static int do_out_close_cb(struct archive* archive, void* _state) {
+	(void) archive;
+
+	do_out_state_t* const state = _state;
+
+	if (state->fd >= 0)
+		close(state->fd);
+
+	return ARCHIVE_OK;
+}
+
+static void strfree(char* const* str) {
+	if (str)
+		free(*str);
+}
+
+int aquarium_template_out(aquarium_opts_t* opts, char const* path, char const* out) {
+	(void) opts;
+
+	aquarium_os_t const os = aquarium_os_info(path);
+
+	// make sure everything is unmounted
+	// this will (hopefully) fail if the aquarium is running (i.e. using the filesystems)
+
+	if (aquarium_enter_setdown(path, os) < 0)
+		return -1;
+
+	// create template
+
+	char* const __attribute__((cleanup(strfree))) cwd = getcwd(NULL, 0);
+
+	if (!cwd)
+		return -1;
+
+	char* __attribute__((cleanup(strfree))) abs_template = NULL;
+	asprintf(&abs_template, "%s/%s", cwd, out);
+
+	if (chdir(path) < 0)
+		errx(EXIT_FAILURE, "chdir: %s", strerror(errno));
+
+	struct archive* const disk = archive_read_disk_new();
+
+	archive_read_disk_set_standard_lookup(disk);
+	archive_read_disk_set_behavior(disk, ARCHIVE_READDISK_NO_TRAVERSE_MOUNTS);
+
+	if (archive_read_disk_open(disk, ".") != ARCHIVE_OK)
+		errx(EXIT_FAILURE, "archive_read_disk_open: %s", archive_error_string(disk));
+
+	// try to deduce compression format to use based on file extension, and if that fails, default to XZ compression
+
+	do_out_state_t state = {
+		.out = abs_template
+	};
+
+	struct archive* const archive = archive_write_new();
+
+	archive_write_add_filter_xz   (archive); // archive_write_filter(3)
+	archive_write_set_format_ustar(archive); // archive_write_format(3)
+
+	archive_write_set_filter_option(archive, "xz", "compression-level", "9");
+	archive_write_set_filter_option(archive, "xz", "threads", "0"); // fixed as of https://github.com/libarchive/libarchive/pull/1664
+
+	if (archive_write_open(archive, &state, do_out_open_cb, do_out_write_cb, do_out_close_cb) < 0)
+		errx(EXIT_FAILURE, "archive_write_open: %s", archive_error_string(archive));
+
+	for (;;) {
+		// read next file and write entry
+
+		struct archive_entry* const entry = archive_entry_new();
+		int rv = archive_read_next_header2(disk, entry);
+
+		if (rv == ARCHIVE_EOF)
+			break;
+
+		if (rv != ARCHIVE_OK)
+			errx(EXIT_FAILURE, "archive_read_next_header2: %s", archive_error_string(disk));
+
+		archive_read_disk_descend(disk);
+		rv = archive_write_header(archive, entry);
+
+		if (rv == ARCHIVE_FATAL)
+			errx(EXIT_FAILURE, "archive_write_header: %s", archive_error_string(archive));
+
+		if (rv < ARCHIVE_OK)
+			warnx("archive_write_header: %s", archive_error_string(archive));
+
+		if (rv <= ARCHIVE_FAILED)
+			goto finish_entry;
+
+		// write file content
+
+		char const* const path = archive_entry_sourcepath(entry);
+		printf("%s\n", path + 2);
+
+		int fd;
+
+		if ((fd = open(path, O_RDONLY)) < 0) {
+			warnx("open(\"%s\"): %s", path, strerror(errno));
+			goto finish_entry;
+		}
+
+		ssize_t len;
+		char buf[4096]; // TODO ARCHIVE_CHUNK_BYTES
+
+		while ((len = read(fd, buf, sizeof buf)) > 0)
+			archive_write_data(archive, buf, len);
+
+		close(fd);
+
+	finish_entry:
+
+		archive_entry_free(entry);
+	}
+
+	archive_read_close(disk);
+	archive_read_free(disk);
+
+	archive_write_close(archive);
+	archive_write_free(archive);
+
+	return 0;
 }

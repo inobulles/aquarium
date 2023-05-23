@@ -6,6 +6,8 @@ freebsd_instance:
 task:
   name: Build aquaBSD test images
   timeout_in: 30m
+  env:
+    CLICOLOR_FORCE:
   setup_script:
     - uname -a
     - df -h
@@ -14,6 +16,8 @@ task:
     - git clone https://github.com/inobulles/bob --depth 1 --branch main
     - ( cd bob && sh build.sh && sh-bin/bob install )
   build_script:
-    - bob test install
+    - bob install
+  test_script:
+    - bob test
   post_script:
     - df -h

@@ -71,10 +71,10 @@ class Installer {
 
 var install = {
 	"aquarium":       ":aquarium",
-	"installer":      "%(Meta.prefix())/bin/installer",
-	"libaquarium.a":  "%(Meta.prefix())/lib/libaquarium.a",
-	"libaquarium.so": "%(Meta.prefix())/lib/libaquarium.so",
-	"aquarium.h":     "%(Meta.prefix())/include/aquarium.h",
+	"installer":      "bin/installer",
+	"libaquarium.a":  "lib/libaquarium.a",
+	"libaquarium.so": "lib/libaquarium.so",
+	"aquarium.h":     "include/aquarium.h",
 }
 
 // testing

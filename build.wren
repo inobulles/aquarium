@@ -7,6 +7,7 @@ Deps.git_inherit("https://github.com/inobulles/libmkfs_msdos")
 
 var cc = CC.new()
 
+cc.add_opt("-g")
 cc.add_opt("-std=c99")
 cc.add_opt("-isystem=/usr/local/include")
 cc.add_opt("-L/usr/local/lib")
@@ -15,7 +16,6 @@ cc.add_opt("-Wall")
 cc.add_opt("-Wextra")
 cc.add_opt("-Isrc/lib/include")
 cc.add_opt("-Isrc/.")
-cc.add_opt("-g")
 
 var lib_src = File.list("src/lib")
 	.where { |path| path.endsWith(".c") }
@@ -33,7 +33,7 @@ src
 
 // create static & dynamic libraries
 
-var linker = Linker.new(cc)
+var linker = Linker.new()
 
 linker.archive(lib_src.toList, "libaquarium.a")
 linker.link(lib_src.toList, ["archive", "copyfile", "crypto", "fetch", "geom", "jail", "mkfs_msdos", "zfs"], "libaquarium.so", true)

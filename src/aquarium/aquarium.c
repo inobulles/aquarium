@@ -1,6 +1,4 @@
 #include <aquarium.h>
-#include "archive.h"
-#include "archive_entry.h"
 #include "copyfile.h"
 #include <dirent.h>
 #include <err.h>
@@ -211,43 +209,6 @@ static int do_sweep(aquarium_opts_t* opts) {
 	return aquarium_sweep(opts) < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
-// outputting aquariums (TODO: much of this code can be shared with do_enter)
-//  - make sure the path of the pointer file is well the one contained in the relevant entry of the aquarium database
-//  - walk the aquarium path and add files/directories to output archive
-
-typedef struct {
-	const char* out;
-	int fd;
-} do_out_state_t;
-
-static int do_out_open_cb(__attribute__((unused)) struct archive* archive, void* _state) {
-	do_out_state_t* state = _state;
-
-	state->fd = open(state->out, O_WRONLY | O_CREAT, 0644);
-
-	if (state->fd < 0) {
-		warnx("open(\"%s\"): %s", state->out, strerror(errno));
-		return ARCHIVE_FATAL;
-	}
-
-	return ARCHIVE_OK;
-}
-
-static la_ssize_t do_out_write_cb(__attribute__((unused)) struct archive* archive, void* _state, const void* buf, size_t len) {
-	do_out_state_t* state = _state;
-	return write(state->fd, buf, len);
-}
-
-static int do_out_close_cb(__attribute__((unused)) struct archive* archive, void* _state) {
-	do_out_state_t* state = _state;
-
-	if (state->fd >= 0) {
-		close(state->fd);
-	}
-
-	return ARCHIVE_OK;
-}
-
 static int do_out(aquarium_opts_t* opts) {
 	if (!out_path) {
 		usage();
@@ -259,110 +220,7 @@ static int do_out(aquarium_opts_t* opts) {
 		return EXIT_FAILURE;
 	}
 
-	aquarium_os_t const os = aquarium_os_info(aquarium_path);
-
-	if (aquarium_enter_setdown(aquarium_path, os) < 0) {
-		return EXIT_FAILURE;
-	}
-
-	// create template
-
-	char* abs_template;
-	asprintf(&abs_template, "%s/%s", getcwd(NULL, 0), out_path); // don't care about freeing this for now
-
-	if (chdir(aquarium_path) < 0) {
-		errx(EXIT_FAILURE, "chdir: %s", strerror(errno));
-	}
-
-	struct archive* disk = archive_read_disk_new();
-
-	archive_read_disk_set_standard_lookup(disk);
-	archive_read_disk_set_behavior(disk, ARCHIVE_READDISK_NO_TRAVERSE_MOUNTS);
-
-	if (archive_read_disk_open(disk, ".") != ARCHIVE_OK) {
-		errx(EXIT_FAILURE, "archive_read_disk_open: %s", archive_error_string(disk));
-	}
-
-	// try to deduce compression format to use based on file extension, and if that fails, default to XZ compression
-
-	do_out_state_t state = {
-		.out = abs_template
-	};
-
-	struct archive* archive = archive_write_new();
-
-	archive_write_add_filter_xz   (archive); // archive_write_filter(3)
-	archive_write_set_format_ustar(archive); // archive_write_format(3)
-
-	archive_write_set_filter_option(archive, "xz", "compression-level", "9");
-	archive_write_set_filter_option(archive, "xz", "threads", "0"); // fixed as of https://github.com/libarchive/libarchive/pull/1664
-
-	if (archive_write_open(archive, &state, do_out_open_cb, do_out_write_cb, do_out_close_cb) < 0) {
-		errx(EXIT_FAILURE, "archive_write_open: %s", archive_error_string(archive));
-	}
-
-	for (;;) {
-		// read next file and write entry
-
-		struct archive_entry* entry = archive_entry_new();
-		int rv = archive_read_next_header2(disk, entry);
-
-		if (rv == ARCHIVE_EOF) {
-			break;
-		}
-
-		if (rv != ARCHIVE_OK) {
-			errx(EXIT_FAILURE, "archive_read_next_header2: %s", archive_error_string(disk));
-		}
-
-		archive_read_disk_descend(disk);
-		rv = archive_write_header(archive, entry);
-
-		if (rv == ARCHIVE_FATAL) {
-			errx(EXIT_FAILURE, "archive_write_header: %s", archive_error_string(archive));
-		}
-
-		if (rv < ARCHIVE_OK) {
-			warnx("archive_write_header: %s", archive_error_string(archive));
-		}
-
-		if (rv <= ARCHIVE_FAILED) {
-			goto finish_entry;
-		}
-
-		// write file content
-
-		const char* path = archive_entry_sourcepath(entry);
-		printf("%s\n", path + 2);
-
-		int fd;
-
-		if ((fd = open(path, O_RDONLY)) < 0) {
-			warnx("open(\"%s\"): %s", path, strerror(errno));
-			goto finish_entry;
-		}
-
-		ssize_t len;
-		char buf[4096]; // TODO ARCHIVE_CHUNK_BYTES
-
-		while ((len = read(fd, buf, sizeof buf)) > 0) {
-			archive_write_data(archive, buf, len);
-		}
-
-		close(fd);
-
-	finish_entry:
-
-		archive_entry_free(entry);
-	}
-
-	archive_read_close(disk);
-	archive_read_free(disk);
-
-	archive_write_close(archive);
-	archive_write_free(archive);
-
-	return EXIT_SUCCESS;
+	return aquarium_template_out(opts, aquarium_path, out_path) < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
 static int do_img_out(aquarium_opts_t* opts) {
@@ -379,6 +237,7 @@ static int do_img_out(aquarium_opts_t* opts) {
 	return aquarium_img_out(opts, aquarium_path, out_path) < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
+// TODO make this a library function
 // copy files from outside of the aquarium
 
 static int do_copy(aquarium_opts_t* opts) {

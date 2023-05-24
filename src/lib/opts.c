@@ -58,20 +58,15 @@ aquarium_opts_t* aquarium_opts_create(void) {
 
 	uid_t const uid = getuid();
 
-	if (!uid) {
+	if (!uid)
 		goto ok;
-	}
 
 	// make sure the $STONERS_GROUP group exists, and error if not
 
 	struct group* const stoners_group = getgrnam(STONERS_GROUP);
 
-	if (!stoners_group) {
-		warnx("Couldn't find \"" STONERS_GROUP "\" group");
-
-		free(opts);
-		return NULL;
-	}
+	if (!stoners_group)
+		errx(EXIT_FAILURE, "Couldn't find \"" STONERS_GROUP "\" group");
 
 	opts->stoners_gid = stoners_group->gr_gid;
 	endgrent();
@@ -82,15 +77,11 @@ aquarium_opts_t* aquarium_opts_create(void) {
 	char** stoners = stoners_group->gr_mem;
 
 	while (*stoners) {
-		if (!strcmp(*stoners++, passwd->pw_name)) {
+		if (!strcmp(*stoners++, passwd->pw_name))
 			goto ok;
-		}
 	}
 
-	warnx("%s is not part of the \"" STONERS_GROUP "\" group", passwd->pw_name);
-
-	free(opts);
-	return NULL;
+	errx(EXIT_FAILURE, "%s is not part of the \"" STONERS_GROUP "\" group", passwd->pw_name);
 
 ok:
 

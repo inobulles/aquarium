@@ -6,23 +6,10 @@ Aquariums allow you to create virtual environments from automatically-downloaded
 Usage examples may be found in the `img` directory.
 This directory serves to automate building images, such as the aquaBSD installer image.
 
-## Compilation
+## Building
 
-As root, run:
-
-```console
-sh build.sh
-```
-
-This will generate the `aquarium` frontend in `bin/aquarium`.
-
-## Testing
-
-As user, run:
+With [Bob the Builder](https://github.com/inobulles/bob) installed:
 
 ```console
-sh test.sh
+bob test install
 ```
-
-This will go through all of the `img` directories and build all bootable image artifacts, which will then be placed in `.build`.
-This is what the CI setup does.

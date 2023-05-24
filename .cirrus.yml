@@ -1,26 +1,23 @@
 freebsd_instance:
   image_family: freebsd-14-0-snap
   cpu: 2
-  memory: 8G
+  memory: 4G
 
 task:
   name: Build aquaBSD test images
   timeout_in: 30m
+  env:
+    CLICOLOR_FORCE:
   setup_script:
-  - uname -a
-  - df -h
-  - pkg --version
-  setup_script:
-  - export IGNORE_OSVERSION=yes
-  - export SSL_NO_VERIFY_PEER=1
-  - fetch https://github.com/inobulles/aquabsd-pkg-repo/releases/download/v0722a-beta/libcopyfile-0722a.pkg -o libcopyfile.pkg
-  - ABI="FreeBSD:14:amd64" pkg add -M libcopyfile.pkg
+    - uname -a
+    - df -h
+    - pkg --version
+    - pkg install -y git-lite
+    - git clone https://github.com/inobulles/bob --depth 1 --branch main
+    - ( cd bob && sh build.sh && sh-bin/bob install )
   build_script:
-  - sh build.sh
+    - bob install
   test_script:
-  - sh test.sh
+    - bob test
   post_script:
-  - ls -lah .build/
-  - df -h
-  image_artifacts:
-    path: ".build/*.img.xz"
+    - df -h

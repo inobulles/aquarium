@@ -73,7 +73,7 @@ int aquarium_create_struct(aquarium_opts_t* opts) {
 	if (access(opts->db_path, R_OK) < 0) {
 		int const fd = creat(opts->db_path, 0660);
 
-		if (!fd) {
+		if (fd < 0) {
 			warnx("creat(\"%s\", 0660): %s", opts->db_path, strerror(errno));
 		}
 

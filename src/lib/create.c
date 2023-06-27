@@ -265,7 +265,7 @@ int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const*
 
 	int const fd = creat(pointer_path, 0 /* don't care about mode */);
 
-	if (!fd) {
+	if (fd < 0) {
 		warnx("creat(\"%s\"): %s", pointer_path, strerror(errno));
 		goto creat_err;
 	}

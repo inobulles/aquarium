@@ -250,9 +250,12 @@ found: {}
 	}
 
 	// check size & hash digest
+	// "file://" protocol files aren't checked, because that would be annoying :P
 
-	if (check_template(&sanctioned, temp_path, total, &sha_context) < 0) {
-		goto check_err;
+	if (strcmp(sanctioned.protocol, "file") != 0) {
+		if (check_template(&sanctioned, temp_path, total, &sha_context) < 0) {
+			goto check_err;
+		}
 	}
 
 	// checks have succeeded; move temporary file to permanent position

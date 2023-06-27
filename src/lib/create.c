@@ -26,26 +26,26 @@ int aquarium_create_struct(aquarium_opts_t* opts) {
 
 	// try making the directory structure 
 
-	mode_t const MODE = 0770; // rwx for owner (root), rwx for group (stoners, execute access is required to list directory)
-
-	#define SET_PERMS(path) \
+	#define SET_PERMS(path, mode) \
 		if (opts->stoners_gid && chown((path), 0, opts->stoners_gid) < 0) { \
 			warnx("chown(\"%s\", 0, %d): %s", (path), opts->stoners_gid, strerror(errno)); \
 			goto err; \
 		} \
 		\
-		if (chmod((path), MODE) < 0) { \
-			warnx("chmod(\"%s\", 0, 0%o): %s", (path), MODE, strerror(errno)); \
+		if (chmod((path), (mode)) < 0) { \
+			warnx("chmod(\"%s\", 0, 0%o): %s", (path), (mode), strerror(errno)); \
 			goto err; \
 		}
 
+	// 0770: execute access is required to list directory
+
 	#define TRY_MKDIR(path) \
-		if (mkdir((path), MODE) < 0 && errno != EEXIST) { \
-			warnx("mkdir(\"%s\", 0%o): %s", (path), MODE, strerror(errno)); \
+		if (mkdir((path), 0770) < 0 && errno != EEXIST) { \
+			warnx("mkdir(\"%s\", 0%o): %s", (path), 0770, strerror(errno)); \
 			goto err; \
 		} \
 		\
-		SET_PERMS((path))
+		SET_PERMS((path), 0770)
 
 	TRY_MKDIR(opts->base_path)
 	TRY_MKDIR(opts->templates_path)
@@ -66,21 +66,21 @@ int aquarium_create_struct(aquarium_opts_t* opts) {
 		fclose(fp);
 	}
 
-	SET_PERMS(opts->sanctioned_path)
+	SET_PERMS(opts->sanctioned_path, 0660)
 
 	// try creating aquarium database file
 
 	if (access(opts->db_path, R_OK) < 0) {
-		int const fd = creat(opts->db_path, MODE);
+		int const fd = creat(opts->db_path, 0660);
 
 		if (!fd) {
-			warnx("creat(\"%s\", 0%o): %s", opts->db_path, MODE, strerror(errno));
+			warnx("creat(\"%s\", 0660): %s", opts->db_path, strerror(errno));
 		}
 
 		close(fd);
 	}
 
-	SET_PERMS(opts->db_path)
+	SET_PERMS(opts->db_path, 0660)
 
 	// success
 

@@ -84,6 +84,13 @@ static inline void __list_templates_dir(const char* path, const char* kind) {
 			printf("%s", tok);
 
 			if (++kind >= SENTINEL) {
+				char* const last_dot = strrchr(name, '.');
+
+				if (last_dot != NULL) {
+					*last_dot = '\0';
+					printf(".%s", name);
+				}
+
 				break;
 			}
 

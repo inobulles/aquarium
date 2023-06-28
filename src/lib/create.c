@@ -17,8 +17,6 @@ int aquarium_create_struct(aquarium_opts_t* opts) {
 	// build filestructure if it doesn't yet exist for convenience
 	// also create a sanctioned templates file with some default and trusted entries
 
-	uid_t const uid = getuid();
-
 	if (setuid(0) < 0) {
 		warnx("setuid(0): %s", strerror(errno));
 		return -1;
@@ -88,8 +86,8 @@ int aquarium_create_struct(aquarium_opts_t* opts) {
 
 err:
 
-	if (setreuid(uid, 0) < 0) {
-		warnx("setreuid(%d): %s", uid, strerror(errno));
+	if (setreuid(opts->initial_uid, 0) < 0) {
+		warnx("setreuid(%d): %s", opts->initial_uid, strerror(errno));
 		rv = -1;
 	}
 
@@ -299,8 +297,6 @@ int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const*
 
 	// setuid root
 
-	uid_t const uid = getuid();
-
 	if (setuid(0) < 0) {
 		warnx("setuid(0): %s", strerror(errno));
 		goto setuid_root_err;
@@ -335,8 +331,8 @@ int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const*
 
 	// finish writing pointer file as user
 
-	if (setreuid(uid, 0) < 0) {
-		warnx("setreuid(%d, 0): %s", uid, strerror(errno));
+	if (setreuid(opts->initial_uid, 0) < 0) {
+		warnx("setreuid(%d, 0): %s", opts->initial_uid, strerror(errno));
 		goto setuid_user_err;
 	}
 
@@ -346,7 +342,7 @@ int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const*
 		warnx("chdir(\"%s\"): %s", cwd, strerror(errno));
 	}
 
-	FILE* pointer_fp = fopen(pointer_path, "wx");
+	FILE* const pointer_fp = fopen(pointer_path, "wx");
 
 	if (!pointer_fp) {
 		warnx("fopen: failed to open %s for writing: %s", pointer_path, strerror(errno));
@@ -364,8 +360,8 @@ int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const*
 	// try set ownership of pointer file to the user who's UID is the current real UID
 	// we don't want to do this if the real UID is root (0), so check 'opts->stoners_gid' (which is 0 when root)
 
-	if (opts->stoners_gid && chown(pointer_path, uid, opts->stoners_gid) < 0) {
-		warnx("chown(\"%s\", %d, %d\"): %s", pointer_path, uid, opts->stoners_gid, strerror(errno));
+	if (opts->stoners_gid && chown(pointer_path, opts->initial_uid, opts->stoners_gid) < 0) {
+		warnx("chown(\"%s\", %d, %d\"): %s", pointer_path, opts->initial_uid, opts->stoners_gid, strerror(errno));
 		rv = -1;
 	}
 
@@ -378,8 +374,8 @@ config_err:
 db_open_err:
 extract_template_err:
 
-	if (setreuid(uid, 0) < 0) {
-		warnx("setreuid(%d, 0): %s", uid, strerror(errno));
+	if (setreuid(opts->initial_uid, 0) < 0) {
+		warnx("setreuid(%d, 0): %s", opts->initial_uid, strerror(errno));
 		rv = -1;
 	}
 
@@ -399,6 +395,7 @@ pointer_file_exists_err:
 mkdtemp_err:
 
 	free(path);
+	free(_path);
 
 	if (chdir(cwd) < 0) {
 		warnx("chdir(\"%s\"): %s", cwd, strerror(errno));

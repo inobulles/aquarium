@@ -56,29 +56,33 @@ aquarium_opts_t* aquarium_opts_create(void) {
 	// skip this stuff if we're root
 	// note that aquariums created as root won't be accessible by members of the stoners group
 
-	uid_t const uid = getuid();
+	opts->initial_uid = getuid();
+	opts->initial_gid = getgid();
 
-	if (!uid)
+	if (!opts->initial_uid) {
 		goto ok;
+	}
 
 	// make sure the $STONERS_GROUP group exists, and error if not
 
 	struct group* const stoners_group = getgrnam(STONERS_GROUP);
 
-	if (!stoners_group)
+	if (!stoners_group) {
 		errx(EXIT_FAILURE, "Couldn't find \"" STONERS_GROUP "\" group");
+	}
 
 	opts->stoners_gid = stoners_group->gr_gid;
 	endgrent();
 
 	// make sure user is part of the $STONERS_GROUP group
 
-	struct passwd* const passwd = getpwuid(uid);
+	struct passwd* const passwd = getpwuid(opts->initial_uid);
 	char** stoners = stoners_group->gr_mem;
 
 	while (*stoners) {
-		if (!strcmp(*stoners++, passwd->pw_name))
+		if (!strcmp(*stoners++, passwd->pw_name)) {
 			goto ok;
+		}
 	}
 
 	errx(EXIT_FAILURE, "%s is not part of the \"" STONERS_GROUP "\" group", passwd->pw_name);

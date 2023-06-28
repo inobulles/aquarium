@@ -9,13 +9,13 @@ var cc = CC.new()
 
 cc.add_opt("-g")
 cc.add_opt("-std=c99")
+cc.add_opt("-Isrc/lib/include")
+cc.add_opt("-Isrc")
 cc.add_opt("-isystem=/usr/local/include")
 cc.add_opt("-L/usr/local/lib")
 cc.add_opt("-fPIC")
 cc.add_opt("-Wall")
 cc.add_opt("-Wextra")
-cc.add_opt("-Isrc/lib/include")
-cc.add_opt("-Isrc/.")
 
 var lib_src = File.list("src/lib")
 	.where { |path| path.endsWith(".c") }

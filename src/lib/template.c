@@ -110,7 +110,10 @@ static int check_template(sanctioned_t* sanctioned, char const* path, size_t tot
 	char hash_hex[SHA256_DIGEST_LENGTH * 2 + 1] = { 0 }; // each byte in the hash can be represented with two hex digits
 
 	for (size_t i = 0; i < sizeof hash; i++) {
-		snprintf(hash_hex, sizeof hash_hex, "%s%02x", hash_hex, hash[i]);
+		char prev_hash_hex[sizeof hash_hex];
+		memcpy(prev_hash_hex, hash_hex, sizeof hash_hex);
+
+		snprintf(hash_hex, sizeof hash_hex, "%s%02x", prev_hash_hex, hash[i]);
 	}
 
 	// template has been downloaded, check its size & SHA256 hash

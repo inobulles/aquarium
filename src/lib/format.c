@@ -133,13 +133,13 @@ static int format_create_part(aquarium_drive_t* drive, char const* type, char co
 int aquarium_format_new_table(aquarium_opts_t* opts, aquarium_drive_t* drive) {
 	char* const provider = drive->provider;
 
-	if (strncmp(provider, "md", 2)) { // XXX to be removed when releasing obviously
+	if (strncmp(provider, "md", 2) != 0) { // XXX to be removed when releasing obviously
 		warnx("THIS OPERATION WILL MAKE IT DIFFICULT OR EVEN IMPOSSIBLE TO RECOVER YOUR DATA - ARE YOU SURE YOU WANT TO CONTINUE? (TYPE 'YES')");
 
 		char confirm[256];
 		fscanf(stdin, "%s", confirm);
 
-		if (strcmp(confirm, "YES")) {
+		if (strcmp(confirm, "YES") != 0) {
 			return -1;
 		}
 	}

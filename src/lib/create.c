@@ -17,7 +17,7 @@ int aquarium_create_struct(aquarium_opts_t* opts) {
 	// build filestructure if it doesn't yet exist for convenience
 	// also create a sanctioned templates file with some default and trusted entries
 
-	if (setuid(0) < 0) {
+	if (opts->initial_uid && setuid(0) < 0) {
 		warnx("setuid(0): %s", strerror(errno));
 		return -1;
 	}
@@ -86,7 +86,7 @@ int aquarium_create_struct(aquarium_opts_t* opts) {
 
 err:
 
-	if (setreuid(opts->initial_uid, 0) < 0) {
+	if (opts->initial_uid && setreuid(opts->initial_uid, 0) < 0) {
 		warnx("setreuid(%d): %s", opts->initial_uid, strerror(errno));
 		rv = -1;
 	}
@@ -297,7 +297,7 @@ int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const*
 
 	// setuid root
 
-	if (setuid(0) < 0) {
+	if (opts->initial_uid && setuid(0) < 0) {
 		warnx("setuid(0): %s", strerror(errno));
 		goto setuid_root_err;
 	}
@@ -331,7 +331,7 @@ int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const*
 
 	// finish writing pointer file as user
 
-	if (setreuid(opts->initial_uid, 0) < 0) {
+	if (opts->initial_uid && setreuid(opts->initial_uid, 0) < 0) {
 		warnx("setreuid(%d, 0): %s", opts->initial_uid, strerror(errno));
 		goto setuid_user_err;
 	}
@@ -374,7 +374,7 @@ config_err:
 db_open_err:
 extract_template_err:
 
-	if (setreuid(opts->initial_uid, 0) < 0) {
+	if (opts->initial_uid && setreuid(opts->initial_uid, 0) < 0) {
 		warnx("setreuid(%d, 0): %s", opts->initial_uid, strerror(errno));
 		rv = -1;
 	}

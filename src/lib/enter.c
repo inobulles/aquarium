@@ -370,8 +370,6 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 
 	// setuid root
 
-	uid_t const uid = getuid();
-
 	if (setuid(0) < 0) {
 		warnx("setuid(0): %s", strerror(errno));
 		goto setuid_root_err;
@@ -575,8 +573,8 @@ mount_devfs_err:
 
 mount_tmpfs_err:
 
-	if (setreuid(uid, 0) < 0) {
-		warnx("setreuid(%d, 0): %s", uid, strerror(errno));
+	if (setreuid(opts->initial_uid, 0) < 0) {
+		warnx("setreuid(%d, 0): %s", opts->initial_uid, strerror(errno));
 		rv = -1;
 	}
 

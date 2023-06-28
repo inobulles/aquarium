@@ -31,12 +31,15 @@ typedef enum {
 	AQUARIUM_DRIVE_KIND_DA,    // SCSI direct access
 	AQUARIUM_DRIVE_KIND_NVME,  // NVMe
 	AQUARIUM_DRIVE_KIND_CD,    // optical disk
-	AQUARIUM_DRIVE_KIND_OTHER, // could be 'mmcsd', 'mmc', 'at91_mci', or 'sdhci'
+	AQUARIUM_DRIVE_KIND_OTHER, // could be 'mmcsd', 'mmc', 'at91_mci', or 'sdhci', yo
 } aquarium_drive_kind_t;
 
 // structs
 
 typedef struct {
+	uid_t initial_uid;
+	gid_t initial_gid;
+
 	gid_t stoners_gid;
 
 	// directory paths

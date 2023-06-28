@@ -33,7 +33,7 @@ int aquarium_create_struct(aquarium_opts_t* opts) {
 		} \
 		\
 		bool const owner_correct = sb.st_uid == 0 && sb.st_gid == opts->stoners_gid; \
-		bool const mode_correct = sb.st_mode == (mode); \
+		bool const mode_correct = (sb.st_mode & 0777) == (mode); \
 		\
 		if (!owner_correct && chown((path), 0, opts->stoners_gid) < 0) { \
 			warnx("chown(\"%s\", 0, %d): %s", (path), opts->stoners_gid, strerror(errno)); \

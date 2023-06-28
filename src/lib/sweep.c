@@ -36,7 +36,7 @@ static int remove_aquarium(char* path) {
 	return rv;
 }
 
-int aquarium_sweep(aquarium_opts_t* opts) {
+int aquarium_sweep(aquarium_opts_t* opts, bool go_hard) {
 	int rv = -1;
 
 	// go through aquarium database
@@ -145,21 +145,25 @@ int aquarium_sweep(aquarium_opts_t* opts) {
 
 	FILE* const write_fp = fopen(opts->db_path, "w");
 
-	if (!write_fp) {
+	if (go_hard && write_fp == NULL) {
 		warnx("fopen(\"%s\"): %s", opts->db_path, strerror(errno));
 		goto open_write_err;
 	}
 
-	for (size_t i = 0; i < survivors_len; i++) {
-		aquarium_db_ent_t* const survivor = &survivors[i];
-		fprintf(write_fp, "%s:%s\n", survivor->pointer_path, survivor->aquarium_path);
+	if (write_fp != NULL) {
+		for (size_t i = 0; i < survivors_len; i++) {
+			aquarium_db_ent_t* const survivor = &survivors[i];
+			fprintf(write_fp, "%s:%s\n", survivor->pointer_path, survivor->aquarium_path);
+		}
 	}
 
 	// success
 
 	rv = 0;
 
-	fclose(write_fp);
+	if (write_fp != NULL) {
+		fclose(write_fp);
+	}
 
 open_write_err:
 

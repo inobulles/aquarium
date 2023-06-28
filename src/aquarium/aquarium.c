@@ -209,6 +209,8 @@ static int do_enter(aquarium_opts_t* opts) {
 		return EXIT_FAILURE;
 	}
 
+	free(aquarium_path); // XXX again, so I have clean Valgrind output
+
 	return EXIT_SUCCESS;
 }
 
@@ -304,9 +306,15 @@ static int do_copy(aquarium_opts_t* opts) {
 
 typedef int (*action_t) (aquarium_opts_t* opts);
 
+static void opts_free(aquarium_opts_t* const* opts_ref) {
+	// XXX we don't really need to free this, but it's polluting my Valgrind output :)
+
+	aquarium_opts_free(*opts_ref);
+}
+
 int main(int argc, char* argv[]) {
 	action_t action = do_list;
-	aquarium_opts_t* const opts = aquarium_opts_create();
+	aquarium_opts_t* const __attribute__((cleanup(opts_free))) opts = aquarium_opts_create();
 
 	if (!opts) {
 		return EXIT_FAILURE;

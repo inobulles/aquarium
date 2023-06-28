@@ -1,5 +1,4 @@
 #include <aquarium.h>
-#include "copyfile.h"
 #include <dirent.h>
 #include <err.h>
 #include <errno.h>
@@ -7,9 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-
-static char** copy_args = NULL;
-static size_t copy_args_len = 0;
 
 static char* template = "amd64.aquabsd.1222a";
 static char* kernel_template = NULL;
@@ -26,8 +22,7 @@ static void usage(void) {
 		"       %1$s [-r base] -I drive [-t template] [-k kernel_template]\n"
 		"       %1$s [-r base] -l\n"
 		"       %1$s [-r base] -s\n"
-		"       %1$s [-r base] -T path -o template\n"
-		"       %1$s [-r base] -y path source_file ... target_directory\n",
+		"       %1$s [-r base] -T path -o template\n",
 	getprogname());
 
 	exit(EXIT_FAILURE);
@@ -244,62 +239,6 @@ static int do_img_out(aquarium_opts_t* opts) {
 	return aquarium_img_out(opts, aquarium_path, out_path) < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
-// TODO make this a library function
-// copy files from outside of the aquarium
-
-static int do_copy(aquarium_opts_t* opts) {
-	if (!copy_args || copy_args_len < 2) {
-		usage();
-	}
-
-	char* aquarium_path = aquarium_db_read_pointer_file(opts, path);
-
-	// setuid root
-
-	if (setuid(0) < 0) {
-		errx(EXIT_FAILURE, "setuid(0): %s", strerror(errno));
-	}
-
-	// iterate through all files
-
-	char* target = copy_args[--copy_args_len];
-
-	while (copy_args_len --> 0) {
-		char* source = copy_args[copy_args_len];
-
-		// load target
-
-		char* target_path;
-		asprintf(&target_path, "%s/%s/%s", aquarium_path, target, strrchr(source, '/'));
-
-		int target_fd = creat(target_path, 0660);
-		free(target_path);
-
-		if (target_fd < 0) {
-			errx(EXIT_FAILURE, "creat(\"%s\"): %s", target_path, strerror(errno));
-		}
-
-		// load source
-
-		int fd = open(source, O_RDONLY);
-
-		if (fd < 0) {
-			errx(EXIT_FAILURE, "open(\"%s\"): %s", source, strerror(errno));
-		}
-
-		// copy & close
-
-		if (fcopyfile(fd, target_fd, 0, COPYFILE_ALL) < 0) {
-			errx(EXIT_FAILURE, "fcopyfile(\"%s\", \"%s\"): %s", source, target_path, strerror(errno));
-		}
-
-		close(fd);
-		close(target_fd);
-	}
-
-	return EXIT_SUCCESS;
-}
-
 // main function
 
 typedef int (*action_t) (aquarium_opts_t* opts);
@@ -370,11 +309,6 @@ int main(int argc, char* argv[]) {
 			path = optarg;
 		}
 
-		else if (c == 'y') {
-			action = do_copy;
-			path = optarg;
-		}
-
 		// name-passing options
 
 		else if (c == 'k') {
@@ -397,12 +331,7 @@ int main(int argc, char* argv[]) {
 	argc -= optind;
 	argv += optind;
 
-	if (action == do_copy) {
-		copy_args = argv;
-		copy_args_len = argc;
-	}
-
-	else if (argc) {
+	if (argc) {
 		usage();
 	}
 

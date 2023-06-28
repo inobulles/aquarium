@@ -264,7 +264,7 @@ found: {}
 	// checks have succeeded; move temporary file to permanent position
 
 	char* final_path;
-	asprintf(&final_path, "%s/%s.txz", path, sanctioned.name);
+	if (asprintf(&final_path, "%s/%s.txz", path, sanctioned.name)) {}
 
 	if (rename(temp_path, final_path) < 0) {
 		warnx("rename: failed to rename %s to %s: %s", temp_path, final_path, strerror(errno));
@@ -359,18 +359,12 @@ int aquarium_extract_template(aquarium_opts_t* opts, char const* path, char cons
 
 		if (res != ARCHIVE_OK && !(res == ARCHIVE_WARN && useless_warning)) {
 			warnx("archive_read_next_header: %s", err);
-			goto archive_read_header_err;
 		}
 	}
 
 	// success
 
 	rv = 0;
-
-	// XXX ERRORS LABELS HERE
-
-archive_read_header_err:
-
 	archive_read_close(archive);
 
 archive_read_open_err:

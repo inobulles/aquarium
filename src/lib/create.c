@@ -395,6 +395,7 @@ pointer_file_exists_err:
 mkdtemp_err:
 
 	free(path);
+	free(_path);
 
 	if (chdir(cwd) < 0) {
 		warnx("chdir(\"%s\"): %s", cwd, strerror(errno));

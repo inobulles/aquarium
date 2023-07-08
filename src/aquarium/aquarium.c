@@ -17,7 +17,7 @@ static void usage(void) {
 	fprintf(stderr,
 		"usage: %1$s [-r base]\n"
 		"       %1$s [-r base] -c path [-t template] [-k kernel_template]\n"
-		"       %1$s [-r base] [-pv] [-h hostname] -e path\n"
+		"       %1$s [-r base] [-d rulesets] [-pv] [-h hostname] -e path\n"
 		"       %1$s [-r base] -i path -o image\n"
 		"       %1$s [-r base] -I drive [-t template] [-k kernel_template]\n"
 		"       %1$s [-r base] -l\n"
@@ -239,6 +239,15 @@ static int do_img_out(aquarium_opts_t* opts) {
 	return aquarium_img_out(opts, aquarium_path, out_path) < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
+static void parse_rulesets(aquarium_opts_t* opts, char* rulesets) {
+	char* tok;
+
+	while ((tok = strsep(&rulesets, ","))) {
+		uint32_t const ruleset = strtoul(tok, NULL, 10);
+		aquarium_opts_add_ruleset(opts, ruleset);
+	}
+}
+
 // main function
 
 typedef int (*action_t) (aquarium_opts_t* opts);
@@ -246,6 +255,7 @@ typedef int (*action_t) (aquarium_opts_t* opts);
 int main(int argc, char* argv[]) {
 	action_t action = do_list;
 	aquarium_opts_t* const opts = aquarium_opts_create();
+	bool default_ruleset = true;
 
 	if (!opts) {
 		return EXIT_FAILURE;
@@ -258,7 +268,12 @@ int main(int argc, char* argv[]) {
 	while ((c = getopt(argc, argv, "c:e:fh:i:I:k:lo:pr:st:T:vy:")) != -1) {
 		// general options
 
-		if (c == 'h') {
+		if (c == 'd') {
+			default_ruleset = false;
+			parse_rulesets(opts, optarg);
+		}
+
+		else if (c == 'h') {
 			opts->hostname = optarg;
 		}
 
@@ -333,6 +348,15 @@ int main(int argc, char* argv[]) {
 
 	if (argc) {
 		usage();
+	}
+
+	if (default_ruleset) {
+		aquarium_opts_add_ruleset(opts, 2);
+		aquarium_opts_add_ruleset(opts, 3);
+
+		if (!opts->vnet_disable) {
+			aquarium_opts_add_ruleset(opts, 5);
+		}
 	}
 
 	if (aquarium_create_struct(opts) < 0) {

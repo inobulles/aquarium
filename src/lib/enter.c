@@ -22,20 +22,28 @@
 		rv = -1; \
 	}
 
-static char* jailparam_from_const_ptr(void const* x) {
-	return (void*) x;
-}
-
-static char* jailparam_from_ptr(void* x) {
-	return x;
-}
-
-static char* jailparam_from_bool(bool x) {
+static char* jailparam_from_bool(char* buf, size_t n, bool x) {
+	(void) buf, (void) n;
 	return x ? "true" : "false";
 }
 
+static char* jailparam_from_u32(char* buf, size_t n, uint32_t x) {
+	snprintf(buf, n - 1, "%u", x);
+	return buf;
+}
+
+static char* jailparam_from_ptr(char* buf, size_t n, void* x) {
+	(void) buf, (void) n;
+	return x;
+}
+
+static char* jailparam_from_const_ptr(char* buf, size_t n, void const* x) {
+	(void) buf, (void) n;
+	return (void*) x;
+}
+
 // XXX I really hate C sometimes
-//     also C11, why are you so lame
+//     also, C11, why are you so lame
 
 #undef true
 #define true ((bool) 1)
@@ -44,12 +52,15 @@ static char* jailparam_from_bool(bool x) {
 #define false ((bool) 0)
 
 #define JAILPARAM(key, val) do { \
+	char buf[256]; \
+	\
 	char* const _val = _Generic((val), \
 		bool: jailparam_from_bool, \
+		uint32_t: jailparam_from_u32, \
 		void*: jailparam_from_ptr, \
 		char*: jailparam_from_ptr, \
 		char const*: jailparam_from_const_ptr \
-	)((val)); \
+	)(buf, sizeof buf, (val)); \
 	\
 	jailparam_init  (&args[args_len], (key)); \
 	jailparam_import(&args[args_len], _val); \
@@ -518,6 +529,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		JAILPARAM("allow.mount.devfs", false);
 		JAILPARAM("allow.raw_sockets", true); // to allow us to send ICMP packets (for ping)
 		JAILPARAM("allow.socket_af", true);
+		JAILPARAM("children.max", opts->max_children);
 
 		if (!opts->vnet_disable) {
 			JAILPARAM("vnet", NULL);

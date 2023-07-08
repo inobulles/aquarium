@@ -17,7 +17,7 @@ static void usage(void) {
 	fprintf(stderr,
 		"usage: %1$s [-r base]\n"
 		"       %1$s [-r base] -c path [-t template] [-k kernel_template]\n"
-		"       %1$s [-r base] [-d rulesets] [-pv] [-h hostname] -e path\n"
+		"       %1$s [-r base] [-d rulesets] [-m max_children] [-pv] [-h hostname] -e path\n"
 		"       %1$s [-r base] -i path -o image\n"
 		"       %1$s [-r base] -I drive [-t template] [-k kernel_template]\n"
 		"       %1$s [-r base] -l\n"
@@ -275,6 +275,10 @@ int main(int argc, char* argv[]) {
 
 		else if (c == 'h') {
 			opts->hostname = optarg;
+		}
+
+		else if (c == 'm') {
+			opts->max_children = strtoul(optarg, NULL, 10);
 		}
 
 		else if (c == 'p') {

@@ -66,6 +66,11 @@ typedef struct {
 	char* hostname;
 	bool persist;
 	bool vnet_disable;
+
+	// devfs ruleset options
+
+	size_t ruleset_count;
+	uint32_t* rulesets;
 } aquarium_opts_t;
 
 typedef struct {
@@ -98,6 +103,7 @@ aquarium_opts_t* aquarium_opts_create(void);
 void aquarium_opts_free(aquarium_opts_t* opts);
 
 void aquarium_opts_set_base_path(aquarium_opts_t* opts, char const* base_path);
+void aquarium_opts_add_ruleset(aquarium_opts_t* opts, uint32_t ruleset);
 
 bool aquarium_db_next_ent(aquarium_opts_t* opts, aquarium_db_ent_t* ent, size_t buf_len, char buf[buf_len], FILE* fp, bool be_dramatic);
 char* aquarium_db_read_pointer_file(aquarium_opts_t* opts, char const* path);

@@ -76,7 +76,7 @@ static int recursive_umount(char* path) {
 			return 0;
 		}
 
-		// XXX is there a reason I shouldn't be using 'MNT_FORCE'?
+		// XXX is there a reason I *shouldn't* be using 'MNT_FORCE'?
 
 		if (unmount(path, MNT_FORCE) < 0) {
 			warnx("unmount(\"%s\"): %s", path, strerror(errno));
@@ -85,10 +85,8 @@ static int recursive_umount(char* path) {
 	}
 }
 
-static int devfs_ruleset(void) {
+static int devfs_ruleset(aquarium_opts_t* opts) {
 	int rv = -1;
-
-	// we necessarily need to start by hiding everything for some reason
 
 	int const devfs_fd = open("dev", O_RDONLY);
 
@@ -97,32 +95,22 @@ static int devfs_ruleset(void) {
 		goto open_err;
 	}
 
-	devfs_rsnum ruleset = 1; // devfsrules_hide_all
+	#define APPLY_RULESET(__ruleset) do { \
+		devfs_rsnum const _ruleset = (__ruleset); \
+		\
+		if (ioctl(devfs_fd, DEVFSIO_SAPPLY, &_ruleset) < 0) { \
+			warnx("DEVFSIO_SAPPLY(%d): %s", _ruleset, strerror(errno)); \
+			goto devfsio_err; \
+		} \
+	} while (0)
 
-	if (ioctl(devfs_fd, DEVFSIO_SAPPLY, &ruleset) < 0) {
-		warnx("DEVFSIO_SAPPLY: %s", strerror(errno));
-		goto devfsio_err;
-	}
+	// we necessarily need to start by hiding everything
 
-	ruleset = 2; // devfsrules_unhide_basic
+	APPLY_RULESET(1); // devfsrules_hide_all
 
-	if (ioctl(devfs_fd, DEVFSIO_SAPPLY, &ruleset) < 0) {
-		warnx("DEVFSIO_SAPPLY: %s", strerror(errno));
-		goto devfsio_err;
-	}
-
-	ruleset = 3; // devfsrules_unhide_login
-
-	if (ioctl(devfs_fd, DEVFSIO_SAPPLY, &ruleset) < 0) {
-		warnx("DEVFSIO_SAPPLY: %s", strerror(errno));
-		goto devfsio_err;
-	}
-
-	ruleset = 5; // devfsrules_jail_vnet
-
-	if (ioctl(devfs_fd, DEVFSIO_SAPPLY, &ruleset) < 0) {
-		warnx("DEVFSIO_SAPPLY: %s", strerror(errno));
-		goto devfsio_err;
+	for (size_t i = 0; i < opts->ruleset_count; i++) {
+		uint32_t const ruleset = opts->rulesets[i];
+		APPLY_RULESET(ruleset);
 	}
 
 	// success
@@ -418,7 +406,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 	// set the correct ruleset for devfs
 	// this comes last, so any setup scripts still have full access to the devfs filesystem
 
-	if (devfs_ruleset() < 0) {
+	if (devfs_ruleset(opts) < 0) {
 		goto devfs_ruleset_err;
 	}
 

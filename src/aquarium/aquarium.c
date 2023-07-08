@@ -208,7 +208,7 @@ static int do_enter(aquarium_opts_t* opts) {
 }
 
 static int do_sweep(aquarium_opts_t* opts) {
-	return aquarium_sweep(opts) < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
+	return aquarium_sweep(opts, true) < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
 static int do_out(aquarium_opts_t* opts) {
@@ -339,7 +339,7 @@ int main(int argc, char* argv[]) {
 		return EXIT_FAILURE;
 	}
 
-	if (aquarium_sweep(opts) < 0) {
+	if (aquarium_sweep(opts, false) < 0) {
 		return EXIT_FAILURE;
 	}
 

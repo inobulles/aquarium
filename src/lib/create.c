@@ -24,16 +24,29 @@ int aquarium_create_struct(aquarium_opts_t* opts) {
 
 	// try making the directory structure 
 
-	#define SET_PERMS(path, mode) \
-		if (opts->stoners_gid && chown((path), 0, opts->stoners_gid) < 0) { \
+	#define SET_PERMS(path, mode) { \
+		struct stat sb; \
+		\
+		if (stat((path), &sb) < 0) { \
+			warnx("stat(\"%s\"): %s", (path), strerror(errno)); \
+			goto err; \
+		} \
+		\
+		bool const owner_correct = sb.st_uid == 0 && sb.st_gid == opts->stoners_gid; \
+		bool const mode_correct = (sb.st_mode & 0777) == (mode); \
+		\
+		if (!owner_correct && chown((path), 0, opts->stoners_gid) < 0) { \
 			warnx("chown(\"%s\", 0, %d): %s", (path), opts->stoners_gid, strerror(errno)); \
 			goto err; \
 		} \
 		\
-		if (chmod((path), (mode)) < 0) { \
+		\
+		if (!mode_correct && chmod((path), (mode)) < 0) { \
 			warnx("chmod(\"%s\", 0, 0%o): %s", (path), (mode), strerror(errno)); \
 			goto err; \
-		}
+		} \
+	}
+
 
 	// 0770: execute access is required to list directory
 

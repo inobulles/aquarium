@@ -265,7 +265,7 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:e:fh:i:I:k:lo:pr:st:T:vy:")) != -1) {
+	while ((c = getopt(argc, argv, "c:d:e:fh:i:I:k:lm:o:pr:st:T:vy:")) != -1) {
 		// general options
 
 		if (c == 'd') {

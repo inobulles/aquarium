@@ -22,11 +22,40 @@
 		rv = -1; \
 	}
 
-#define JAILPARAM(key, val) \
-	jailparam_init  (&args[args_len], (key)); \
-	jailparam_import(&args[args_len], (val)); \
+static char* jailparam_from_const_ptr(void const* x) {
+	return (void*) x;
+}
+
+static char* jailparam_from_ptr(void* x) {
+	return x;
+}
+
+static char* jailparam_from_bool(bool x) {
+	return x ? "true" : "false";
+}
+
+// XXX I really hate C sometimes
+//     also C11, why are you so lame
+
+#undef true
+#define true ((bool) 1)
+
+#undef false
+#define false ((bool) 0)
+
+#define JAILPARAM(key, val) do { \
+	char* const _val = _Generic((val), \
+		bool: jailparam_from_bool, \
+		void*: jailparam_from_ptr, \
+		char*: jailparam_from_ptr, \
+		char const*: jailparam_from_const_ptr \
+	)((val)); \
 	\
-	args_len++;
+	jailparam_init  (&args[args_len], (key)); \
+	jailparam_import(&args[args_len], _val); \
+	\
+	args_len++; \
+} while (0)
 
 #define ILLEGAL_HOSTNAME_CHAR(h) ((h) == '.' || (h) == ' ' || (h) == '/')
 
@@ -482,25 +511,25 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 
 		// create the jail
 
-		JAILPARAM("name", hash)
-		JAILPARAM("path", path)
-		JAILPARAM("host.hostname", hostname)
-		JAILPARAM("allow.mount", "false")
-		JAILPARAM("allow.mount.devfs", "false")
-		JAILPARAM("allow.raw_sockets", "true") // to allow us to send ICMP packets (for ping)
-		JAILPARAM("allow.socket_af", "true")
+		JAILPARAM("name", hash);
+		JAILPARAM("path", path);
+		JAILPARAM("host.hostname", hostname);
+		JAILPARAM("allow.mount", false);
+		JAILPARAM("allow.mount.devfs", false);
+		JAILPARAM("allow.raw_sockets", true); // to allow us to send ICMP packets (for ping)
+		JAILPARAM("allow.socket_af", true);
 
 		if (!opts->vnet_disable) {
-			JAILPARAM("vnet", NULL)
+			JAILPARAM("vnet", NULL);
 		}
 
 		else {
-			JAILPARAM("ip4", "inherit")
-			JAILPARAM("ip6", "inherit")
+			JAILPARAM("ip4", "inherit");
+			JAILPARAM("ip6", "inherit");
 		}
 
 		if (opts->persist) {
-			JAILPARAM("persist", NULL)
+			JAILPARAM("persist", NULL);
 		}
 
 		if (jailparam_set(args, args_len, JAIL_CREATE | JAIL_ATTACH) < 0) {

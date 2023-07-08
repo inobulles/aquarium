@@ -87,7 +87,6 @@ static int recursive_umount(char* path) {
 
 static int devfs_ruleset(void) {
 	int rv = -1;
-	return 0;
 
 	// we necessarily need to start by hiding everything for some reason
 
@@ -498,14 +497,8 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		JAILPARAM("name", hash)
 		JAILPARAM("path", path)
 		JAILPARAM("host.hostname", hostname)
-		JAILPARAM("children.max", "1")
-		JAILPARAM("allow.mount", "true")
-		JAILPARAM("allow.mount.devfs", "true")
-		JAILPARAM("allow.mount.tmpfs", "true")
-		JAILPARAM("allow.mount.fdescfs", "true")
-		JAILPARAM("allow.mount.procfs", "true")
-		JAILPARAM("allow.mount.linsysfs", "true")
-		JAILPARAM("allow.mount.linprocfs", "true")
+		JAILPARAM("allow.mount", "false")
+		JAILPARAM("allow.mount.devfs", "false")
 		JAILPARAM("allow.raw_sockets", "true") // to allow us to send ICMP packets (for ping)
 		JAILPARAM("allow.socket_af", "true")
 

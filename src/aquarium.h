@@ -89,12 +89,14 @@ typedef struct {
 
 	char* hostname;
 	bool persist;
-	bool vnet_disable;
 	uint32_t max_children;
 
 	size_t jailparam_count;
 	char** jailparam_keys;
 	char** jailparam_vals;
+
+	char* vnet_bridge;
+	aquarium_vnet_t vnet;
 
 	// devfs ruleset options
 

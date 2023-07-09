@@ -17,7 +17,7 @@ static void usage(void) {
 	fprintf(stderr,
 		"usage: %1$s [-r base]\n"
 		"       %1$s [-r base] -c path [-t template] [-k kernel_template]\n"
-		"       %1$s [-r base] [-d rulesets] [-j jailparams] [-m max_children] [-pv] [-h hostname] -e path\n"
+		"       %1$s [-r base] [-d rulesets] [-j jailparams] [-m max_children] [-p] [-v interface] [-h hostname] -e path\n"
 		"       %1$s [-r base] -i path -o image\n"
 		"       %1$s [-r base] -I drive [-t template] [-k kernel_template]\n"
 		"       %1$s [-r base] -l\n"
@@ -287,7 +287,7 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:d:e:fh:i:I:j:k:lm:o:pr:st:T:vy:")) != -1) {
+	while ((c = getopt(argc, argv, "c:d:e:fh:i:I:j:k:lm:o:pr:st:T:v:y:")) != -1) {
 		// general options
 
 		if (c == 'd') {
@@ -316,7 +316,7 @@ int main(int argc, char* argv[]) {
 		}
 
 		else if (c == 'v') {
-			opts->vnet_disable = true;
+			opts->vnet_bridge = optarg;
 		}
 
 		// action options
@@ -400,7 +400,7 @@ int main(int argc, char* argv[]) {
 		aquarium_opts_add_devfs_ruleset(opts, AQUARIUM_DEVFS_RULESET_UNHIDE_BASIC);
 		aquarium_opts_add_devfs_ruleset(opts, AQUARIUM_DEVFS_RULESET_UNHIDE_LOGIN);
 
-		if (opts->make_vnet) {
+		if (opts->vnet_bridge) {
 			aquarium_opts_add_devfs_ruleset(opts, AQUARIUM_DEVFS_RULESET_JAIL_VNET);
 		}
 	}

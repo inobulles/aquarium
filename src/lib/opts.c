@@ -52,7 +52,7 @@ aquarium_opts_t* aquarium_opts_create(void) {
 	// jail options
 
 	opts->persist = false;
-	opts->vnet_disable = false;
+	opts->vnet_bridge = NULL;
 
 	// skip this stuff if we're root
 	// note that aquariums created as root won't be accessible by members of the stoners group

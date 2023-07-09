@@ -78,6 +78,11 @@ static char* jailparam_from_const_ptr(char* buf, size_t n, void const* x) {
 	args_len++; \
 } while (0)
 
+#define CHILD_EXIT(val) do { \
+	sem != SEM_FAILED && sem_post(sem); \
+	_exit((val)); \
+} while (0)
+
 #define ILLEGAL_HOSTNAME_CHAR(h) ((h) == '.' || (h) == ' ' || (h) == '/')
 
 static int is_mountpoint(char* path) {
@@ -539,7 +544,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		if (jid >= 0) {
 			if (jail_attach(jid) < 0) {
 				warnx("jail_attach(%d): %s", jid, strerror(errno));
-				_exit(EXIT_FAILURE);
+				CHILD_EXIT(EXIT_FAILURE);
 			}
 
 			goto inside;
@@ -600,7 +605,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 
 		if (jailparam_set(args, args_len, JAIL_CREATE | JAIL_ATTACH) < 0) {
 			warnx("jailparam_set: %s (%s)", strerror(errno), jail_errmsg);
-			_exit(EXIT_FAILURE);
+			CHILD_EXIT(EXIT_FAILURE);
 		}
 
 		// we're now inside of the aquarium
@@ -615,10 +620,10 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		// call the passed callback function
 
 		if (!opts->persist && cb(param) < 0) {
-			_exit(EXIT_FAILURE);
+			CHILD_EXIT(EXIT_FAILURE);
 		}
 
-		_exit(EXIT_SUCCESS);
+		CHILD_EXIT(EXIT_SUCCESS);
 	}
 
 	// wait for the jail to be ready before attaching the vnet to it

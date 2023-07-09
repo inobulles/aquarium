@@ -67,7 +67,11 @@ static char* jailparam_from_const_ptr(char* buf, size_t n, void const* x) {
 		char const*: jailparam_from_const_ptr \
 	)(buf, sizeof buf, (val)); \
 	\
-	jailparam_init  (&args[args_len], (key)); \
+	if (jailparam_init(&args[args_len], (key)) < 0) { \
+		warnx("jailparam_init: Unknown jail parameter \"%s\" - are you sure it isn't a pseudo-jailparam?", (key)); \
+		continue; \
+	} \
+	\
 	jailparam_import(&args[args_len], _val); \
 	\
 	args_len++; \

@@ -440,6 +440,12 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		goto mount_devfs_err;
 	}
 
+	// create vnet (if needed)
+
+	if (opts->vnet_bridge && aquarium_vnet_create(&opts->vnet, opts->vnet_bridge) < 0) {
+		goto vnet_err;
+	}
+
 	// OS-specific actions
 
 	aquarium_os_t const os = aquarium_os_info(NULL);
@@ -521,7 +527,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 			hostname = (void*) path; // TODO idk if it makes more sense to default to the path as the hostname or the name the user gave to the aquarium
 		}
 
-		hostname = strdup(hostname); // duplicate so that we don't also modify path (we don't concern ourselves with freeing)
+		hostname = strdup(hostname); // duplicate so that we don't also modify path (we don't concern ourselves with freeing inside the child)
 
 		for (size_t i = 0; i < strlen(hostname); i++) {
 			if (ILLEGAL_HOSTNAME_CHAR(hostname[i])) {
@@ -540,8 +546,8 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		JAILPARAM("allow.socket_af", true);
 		JAILPARAM("children.max", opts->max_children);
 
-		if (!opts->vnet_disable) {
-			JAILPARAM("vnet", NULL);
+		if (opts->vnet_bridge) {
+			JAILPARAM("vnet", "new");
 		}
 
 		else {
@@ -612,6 +618,11 @@ os_setup_err:
 
 	TRY_UMOUNT("dev")
 
+	if (opts->vnet_bridge && !opts->persist) {
+		aquarium_vnet_destroy(&opts->vnet);
+	}
+
+vnet_err:
 mount_devfs_err:
 
 	TRY_UMOUNT("tmp")

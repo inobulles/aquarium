@@ -544,6 +544,13 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 			JAILPARAM("persist", NULL);
 		}
 
+		for (size_t i = 0; i < opts->jailparam_count; i++) {
+			char* const key = opts->jailparam_keys[i];
+			char* const val = opts->jailparam_vals[i];
+
+			JAILPARAM(key, val);
+		}
+
 		if (jailparam_set(args, args_len, JAIL_CREATE | JAIL_ATTACH) < 0) {
 			warnx("jailparam_set: %s (%s)", strerror(errno), jail_errmsg);
 			_exit(EXIT_FAILURE);

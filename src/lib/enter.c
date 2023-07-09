@@ -52,6 +52,11 @@ static char* jailparam_from_const_ptr(char* buf, size_t n, void const* x) {
 #define false ((bool) 0)
 
 #define JAILPARAM(key, val) do { \
+	if (args_len > nitems(args)) { \
+		warnx("Trying to pass more jailparams than the maximum allowed (%zu, total)!", nitems(args)); \
+		continue; \
+	} \
+	\
 	char buf[256]; \
 	\
 	char* const _val = _Generic((val), \

@@ -114,6 +114,11 @@ void aquarium_opts_free(aquarium_opts_t* opts) {
 	TRY_FREE(opts->esp_oem);
 	TRY_FREE(opts->esp_vol_label);
 
+	// jailparams
+
+	TRY_FREE(opts->jailparam_keys);
+	TRY_FREE(opts->jailparam_vals);
+
 	// devfs ruleset options
 
 	TRY_FREE(opts->rulesets);
@@ -147,4 +152,14 @@ void aquarium_opts_set_base_path(aquarium_opts_t* opts, char const* base_path) {
 void aquarium_opts_add_ruleset(aquarium_opts_t* opts, uint32_t ruleset) {
 	opts->rulesets = realloc(opts->rulesets, ++opts->ruleset_count * sizeof *opts->rulesets);
 	opts->rulesets[opts->ruleset_count - 1] = ruleset;
+}
+
+void aquarium_opts_add_jailparam(aquarium_opts_t* opts, char* key, char* val) {
+	opts->jailparam_count++;
+
+	opts->jailparam_keys = realloc(opts->jailparam_keys, opts->jailparam_count * sizeof *opts->jailparam_keys);
+	opts->jailparam_vals = realloc(opts->jailparam_vals, opts->jailparam_count * sizeof *opts->jailparam_vals);
+
+	opts->jailparam_keys[opts->jailparam_count - 1] = key;
+	opts->jailparam_vals[opts->jailparam_count - 1] = val;
 }

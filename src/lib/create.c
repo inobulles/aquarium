@@ -196,6 +196,8 @@ static int config(aquarium_opts_t* opts, char* path) {
 	}
 
 	// enter the jail in a separate process & run that script
+	// TODO make sure there's nothing crazy in opts
+	//      I guess it's always possible for the user to accidentally pass in e.g. -v to aquarium -c
 
 	pid_t pid = fork();
 

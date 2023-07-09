@@ -8,7 +8,7 @@ pointer="aquarium"
 rm -f $pointer
 
 $aquarium -c $pointer -t amd64.aquabsd.$version -k amd64.aquabsd.$version
-$aquarium -ve $pointer < custom.sh
+$aquarium -e $pointer < custom.sh
 $aquarium -i $pointer -o final.img
 
 rm $pointer

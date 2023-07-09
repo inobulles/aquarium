@@ -2,9 +2,12 @@
 
 // TODO proper error handling with a nice traceback would be nice
 
+#include <err.h>
+#include <net/if.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -44,7 +47,20 @@ typedef enum {
 	AQUARIUM_DEVFS_RULESET_JAIL_VNET    = 5, // devfsrules_jail_vnet
 } aquarium_devfs_ruleset_t;
 
+// other typedefs
+
+typedef char aquarium_if_name_t[IFNAMSIZ];
+
 // structs
+
+typedef struct {
+	int sock;
+	bool attached;
+
+	aquarium_if_name_t epair;
+	aquarium_if_name_t internal_epair;
+	aquarium_if_name_t bridge;
+} aquarium_vnet_t;
 
 typedef struct {
 	uid_t initial_uid;
@@ -75,12 +91,14 @@ typedef struct {
 
 	char* hostname;
 	bool persist;
-	bool vnet_disable;
 	uint32_t max_children;
 
 	size_t jailparam_count;
 	char** jailparam_keys;
 	char** jailparam_vals;
+
+	char* vnet_bridge;
+	aquarium_vnet_t vnet;
 
 	// devfs ruleset options
 
@@ -130,6 +148,7 @@ int aquarium_template_out(aquarium_opts_t* opts, char const* path, char const* o
 
 aquarium_os_t aquarium_os_info(char const* path);
 int aquarium_os_load_linux64_kmod(void);
+int aquarium_os_load_epair_kmod(void);
 
 int aquarium_create_struct(aquarium_opts_t* opts);
 int aquarium_create(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template);
@@ -150,6 +169,12 @@ int aquarium_format_create_zfs(aquarium_opts_t* opts, aquarium_drive_t* drive, c
 int aquarium_img_populate_esp(char const* path, char const* stage);
 int aquarium_img_out(aquarium_opts_t* opts, char const* path, char const* out);
 
+int aquarium_vnet_create(aquarium_vnet_t* vnet, char* bridge_name);
+void aquarium_vnet_destroy(aquarium_vnet_t* vnet);
+
+int aquarium_vnet_dhcp(aquarium_vnet_t* vnet);
+int aquarium_vnet_attach(aquarium_vnet_t* vnet, char* hash);
+
 // internal macros & functions common to all source files
 
 #define __AQUARIUM_IOV(name, val) \
@@ -161,6 +186,10 @@ __attribute__((unused)) static int __aquarium_wait_for_process(pid_t pid) {
 	while (waitpid(pid, &wstatus, 0) > 0);
 
 	if (WIFSIGNALED(wstatus)) {
+		if (WTERMSIG(wstatus) == SIGSEGV) {
+			warnx("(Segmentation fault)");
+		}
+
 		return EXIT_FAILURE;
 	}
 

@@ -2,19 +2,20 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/queue.h>
 #include <fs/devfs/devfs.h>
 #include <jail.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <semaphore.h>
 #include <sys/ioccom.h>
 #include <sys/param.h>
 #include <sys/jail.h>
 #include <sys/procctl.h>
-#include <sys/stat.h>
-#include <sys/uio.h>
 #include <sys/mount.h>
+#include <sys/stat.h>
+#include <sys/queue.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 #define TRY_UMOUNT(mountpoint) \
@@ -75,6 +76,11 @@ static char* jailparam_from_const_ptr(char* buf, size_t n, void const* x) {
 	jailparam_import(&args[args_len], _val); \
 	\
 	args_len++; \
+} while (0)
+
+#define CHILD_EXIT(val) do { \
+	sem != SEM_FAILED && sem_post(sem); \
+	_exit((val)); \
 } while (0)
 
 #define ILLEGAL_HOSTNAME_CHAR(h) ((h) == '.' || (h) == ' ' || (h) == '/')
@@ -440,6 +446,20 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		goto mount_devfs_err;
 	}
 
+	// create vnet (if needed)
+
+	if (opts->vnet_bridge && aquarium_vnet_create(&opts->vnet, opts->vnet_bridge) < 0) {
+		goto vnet_err;
+	}
+
+	/*
+	// get IP address for internal epair
+
+	if (opts->vnet_bridge && aquarium_vnet_dhcp(&opts->vnet) < 0) {
+		goto vnet_err;
+	}
+	*/
+
 	// OS-specific actions
 
 	aquarium_os_t const os = aquarium_os_info(NULL);
@@ -481,6 +501,14 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		goto hash_err;
 	}
 
+	// create semaphore name
+	// according to sem_open(3), semaphores must start with a slash on FreeBSD
+	// also make sure it's unlinked (but don't error if it doesn't exist)
+
+	char* sem_name;
+	if (asprintf(&sem_name, "/s%s", hash)) {}
+	sem_unlink(sem_name);
+
 	// attempt to get the jail ID
 	// if found, we can skip the jail creation step & attach ourselves to it right away
 	// this all happens in a child process, because jail_attach will steal our process
@@ -493,6 +521,21 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 	}
 
 	if (!pid) {
+		// create semaphore to signal when the jail is ready to receive the vnet
+		// easier to use named semaphores here than setting up shared memory for a mutex shared between processes
+
+		sem_t* sem = SEM_FAILED;
+
+		if (opts->vnet_bridge) {
+			sem = sem_open(sem_name, O_CREAT, 0200, 0);
+
+			if (sem == SEM_FAILED) {
+				warnx("sem_open(\"%s\", 0600): %s", sem_name, strerror(errno));
+			}
+		}
+
+		// if jail already exists, try entering it straight away
+
 		int const jid = jail_getid(hash);
 
 		struct jailparam args[64] = { 0 };
@@ -501,7 +544,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		if (jid >= 0) {
 			if (jail_attach(jid) < 0) {
 				warnx("jail_attach(%d): %s", jid, strerror(errno));
-				_exit(EXIT_FAILURE);
+				CHILD_EXIT(EXIT_FAILURE);
 			}
 
 			goto inside;
@@ -521,7 +564,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 			hostname = (void*) path; // TODO idk if it makes more sense to default to the path as the hostname or the name the user gave to the aquarium
 		}
 
-		hostname = strdup(hostname); // duplicate so that we don't also modify path (we don't concern ourselves with freeing)
+		hostname = strdup(hostname); // duplicate so that we don't also modify path (we don't concern ourselves with freeing inside the child)
 
 		for (size_t i = 0; i < strlen(hostname); i++) {
 			if (ILLEGAL_HOSTNAME_CHAR(hostname[i])) {
@@ -540,8 +583,8 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		JAILPARAM("allow.socket_af", true);
 		JAILPARAM("children.max", opts->max_children);
 
-		if (!opts->vnet_disable) {
-			JAILPARAM("vnet", NULL);
+		if (opts->vnet_bridge) {
+			JAILPARAM("vnet", "new");
 		}
 
 		else {
@@ -562,20 +605,45 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 
 		if (jailparam_set(args, args_len, JAIL_CREATE | JAIL_ATTACH) < 0) {
 			warnx("jailparam_set: %s (%s)", strerror(errno), jail_errmsg);
-			_exit(EXIT_FAILURE);
+			CHILD_EXIT(EXIT_FAILURE);
 		}
 
 		// we're now inside of the aquarium
+		// if we have a semaphore, signal this
+
+		if (sem != SEM_FAILED && sem_post(sem) < 0) {
+			warnx("sem_post(\"%s\"): %s", sem_name, strerror(errno));
+		}
 
 	inside:
 
 		// call the passed callback function
 
 		if (!opts->persist && cb(param) < 0) {
-			_exit(EXIT_FAILURE);
+			CHILD_EXIT(EXIT_FAILURE);
 		}
 
-		_exit(EXIT_SUCCESS);
+		CHILD_EXIT(EXIT_SUCCESS);
+	}
+
+	// wait for the jail to be ready before attaching the vnet to it
+
+	sem_t* sem = SEM_FAILED;
+
+	if (opts->vnet_bridge) {
+		sem = sem_open(sem_name, O_CREAT, 0400, 0);
+
+		if (sem == SEM_FAILED) {
+			warnx("sem_open(\"%s\", 0600): %s", sem_name, strerror(errno));
+		}
+
+		else if (sem_wait(sem) < 0) {
+			warnx("sem_wait(\"%s\"): %s", sem_name, strerror(errno));
+		}
+
+		// try it anyway, you never know and it costs nothing
+
+		aquarium_vnet_attach(&opts->vnet, hash);
 	}
 
 	// wait for child process
@@ -587,6 +655,14 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		goto child_err;
 	}
 
+	// try to close/unlink the semaphore
+
+	if (sem != SEM_FAILED) {
+		sem_close(sem);
+	}
+
+	sem_unlink(sem_name);
+
 	// success
 
 	rv = 0;
@@ -594,6 +670,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 child_err:
 fork_err:
 
+	free(sem_name);
 	free(hash);
 
 hash_err:
@@ -612,6 +689,11 @@ os_setup_err:
 
 	TRY_UMOUNT("dev")
 
+	if (opts->vnet_bridge && !opts->persist) {
+		aquarium_vnet_destroy(&opts->vnet);
+	}
+
+vnet_err:
 mount_devfs_err:
 
 	TRY_UMOUNT("tmp")

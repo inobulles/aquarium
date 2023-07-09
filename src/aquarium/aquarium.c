@@ -243,8 +243,8 @@ static void parse_rulesets(aquarium_opts_t* opts, char* rulesets) {
 	char* tok;
 
 	while ((tok = strsep(&rulesets, ","))) {
-		uint32_t const ruleset = strtoul(tok, NULL, 10);
-		aquarium_opts_add_ruleset(opts, ruleset);
+		aquarium_devfs_ruleset_t const ruleset = strtoul(tok, NULL, 10);
+		aquarium_opts_add_devfs_ruleset(opts, ruleset);
 	}
 }
 
@@ -397,11 +397,11 @@ int main(int argc, char* argv[]) {
 	}
 
 	if (default_ruleset) {
-		aquarium_opts_add_ruleset(opts, 2);
-		aquarium_opts_add_ruleset(opts, 3);
+		aquarium_opts_add_devfs_ruleset(opts, AQUARIUM_DEVFS_RULESET_UNHIDE_BASIC);
+		aquarium_opts_add_devfs_ruleset(opts, AQUARIUM_DEVFS_RULESET_UNHIDE_LOGIN);
 
-		if (!opts->vnet_disable) {
-			aquarium_opts_add_ruleset(opts, 5);
+		if (opts->make_vnet) {
+			aquarium_opts_add_devfs_ruleset(opts, AQUARIUM_DEVFS_RULESET_JAIL_VNET);
 		}
 	}
 

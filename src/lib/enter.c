@@ -149,7 +149,7 @@ static int devfs_ruleset(aquarium_opts_t* opts) {
 	APPLY_RULESET(1); // devfsrules_hide_all
 
 	for (size_t i = 0; i < opts->ruleset_count; i++) {
-		uint32_t const ruleset = opts->rulesets[i];
+		aquarium_devfs_ruleset_t const ruleset = opts->rulesets[i];
 		APPLY_RULESET(ruleset);
 	}
 

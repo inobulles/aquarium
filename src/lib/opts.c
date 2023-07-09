@@ -149,7 +149,7 @@ void aquarium_opts_set_base_path(aquarium_opts_t* opts, char const* base_path) {
 	if (asprintf(&opts->db_path,         "%s/" DB_PATH,         opts->base_path)) {}
 }
 
-void aquarium_opts_add_ruleset(aquarium_opts_t* opts, uint32_t ruleset) {
+void aquarium_opts_add_devfs_ruleset(aquarium_opts_t* opts, uint32_t ruleset) {
 	opts->rulesets = realloc(opts->rulesets, ++opts->ruleset_count * sizeof *opts->rulesets);
 	opts->rulesets[opts->ruleset_count - 1] = ruleset;
 }

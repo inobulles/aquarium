@@ -34,6 +34,16 @@ typedef enum {
 	AQUARIUM_DRIVE_KIND_OTHER, // could be 'mmcsd', 'mmc', 'at91_mci', or 'sdhci', yo
 } aquarium_drive_kind_t;
 
+// these can all be found in /etc/defaults/devfs.rules
+
+typedef enum {
+	AQUARIUM_DEVFS_RULESET_HIDE_ALL     = 1, // devfsrules_hide_all
+	AQUARIUM_DEVFS_RULESET_UNHIDE_BASIC = 2, // devfsrules_unhide_basic
+	AQUARIUM_DEVFS_RULESET_UNHIDE_LOGIN = 3, // devfsrules_unhide_login
+	AQUARIUM_DEVFS_RULESET_JAIL         = 4, // devfsrules_jail
+	AQUARIUM_DEVFS_RULESET_JAIL_VNET    = 5, // devfsrules_jail_vnet
+} aquarium_devfs_ruleset_t;
+
 // structs
 
 typedef struct {
@@ -75,7 +85,7 @@ typedef struct {
 	// devfs ruleset options
 
 	size_t ruleset_count;
-	uint32_t* rulesets;
+	aquarium_devfs_ruleset_t* rulesets;
 } aquarium_opts_t;
 
 typedef struct {
@@ -108,7 +118,7 @@ aquarium_opts_t* aquarium_opts_create(void);
 void aquarium_opts_free(aquarium_opts_t* opts);
 
 void aquarium_opts_set_base_path(aquarium_opts_t* opts, char const* base_path);
-void aquarium_opts_add_ruleset(aquarium_opts_t* opts, uint32_t ruleset);
+void aquarium_opts_add_devfs_ruleset(aquarium_opts_t* opts, aquarium_devfs_ruleset_t ruleset);
 void aquarium_opts_add_jailparam(aquarium_opts_t* opts, char* key, char* val);
 
 bool aquarium_db_next_ent(aquarium_opts_t* opts, aquarium_db_ent_t* ent, size_t buf_len, char buf[buf_len], FILE* fp, bool be_dramatic);

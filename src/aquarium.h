@@ -55,6 +55,7 @@ typedef char aquarium_if_name_t[IFNAMSIZ];
 
 typedef struct {
 	int sock;
+	bool attached;
 
 	aquarium_if_name_t epair;
 	aquarium_if_name_t internal_epair;
@@ -171,6 +172,7 @@ int aquarium_img_out(aquarium_opts_t* opts, char const* path, char const* out);
 int aquarium_vnet_create(aquarium_vnet_t* vnet, char* bridge_name);
 void aquarium_vnet_destroy(aquarium_vnet_t* vnet);
 
+int aquarium_vnet_dhcp(aquarium_vnet_t* vnet);
 int aquarium_vnet_attach(aquarium_vnet_t* vnet, char* hash);
 
 // internal macros & functions common to all source files

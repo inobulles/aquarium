@@ -198,6 +198,39 @@ void aquarium_vnet_destroy(aquarium_vnet_t* vnet) {
 	}
 }
 
+int aquarium_vnet_dhcp(aquarium_vnet_t* vnet) {
+	// quick sanity check
+
+	if (vnet->attached) {
+		warnx("vnet already attached");
+		return -1;
+	}
+
+	// get IP address for external epair first
+	// XXX we can't do this straight on the internal one for some reason
+
+	char* cmd;
+	if (asprintf(&cmd, "dhclient %s", vnet->epair)) {}
+
+	if (system(cmd) != EXIT_SUCCESS) {
+		warnx("'%s' failed", cmd);
+		free(cmd);
+
+		return -1;
+	}
+
+	free(cmd);
+
+	// TODO transfer that IP over to the internal one
+
+	return 0;
+}
+
 int aquarium_vnet_attach(aquarium_vnet_t* vnet, char* hash) {
-	return if_vnet(vnet, vnet->internal_epair, hash);
+	if (if_vnet(vnet, vnet->internal_epair, hash) < 0) {
+		return -1;
+	}
+
+	vnet->attached = true;
+	return 0;
 }

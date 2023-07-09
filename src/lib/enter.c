@@ -447,6 +447,14 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		goto vnet_err;
 	}
 
+	/*
+	// get IP address for internal epair
+
+	if (opts->vnet_bridge && aquarium_vnet_dhcp(&opts->vnet) < 0) {
+		goto vnet_err;
+	}
+	*/
+
 	// OS-specific actions
 
 	aquarium_os_t const os = aquarium_os_info(NULL);

@@ -380,6 +380,10 @@ int main(int argc, char* argv[]) {
 		usage();
 	}
 
+	if (opts->vnet_bridge && opts->persist) {
+		errx(EXIT_FAILURE, "can't use both -v and -p at the same time");
+	}
+
 	// a non-zero amount of children means we want to allow nesting
 	// that means we also probably want to also allow FS mounting
 	// this will overwrite jailparams, so use children.max instead of -m if that's not what you want!

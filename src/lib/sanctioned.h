@@ -10,4 +10,8 @@ static char const* const SANCTIONED =
 	"k:amd64.aquabsd.1222a:https:github.com/inobulles/aquabsd-core/releases/download/v1222a-beta/kernel.txz:47628512:7105e6c8f01d5e5c60d653f258356cb8a6a50330229753218c425c9bde9542e0\n"
 	"b:amd64.aquabsd.0.1.0-beta:https:github.com/inobulles/aquabsd-core/releases/download/v0.1.0-beta/base.txz:102059036:c433417808a9cbf19015427667c223744e16b2e57d89dad3f7d57c73a70d6a9c\n"
 	"k:amd64.aquabsd.0.1.0-beta:https:github.com/inobulles/aquabsd-core/releases/download/v0.1.0-beta/kernel.txz:53594932:515baf7ea7bc94e5473f2317b9d1343a7d405e3f2f51bf9abd93db529b05b126\n"
+	"b:amd64.aquabsd.0.1.1-beta:https:github.com/inobulles/aquabsd-core/releases/download/v0.1.1-beta/base.txz:106180020:c7503d62a8a4dd14e0a50bc0b9017cea1b45e8d9e03137b23bc62dde4f0f1fcc\n"
+	"k:amd64.aquabsd.0.1.1-beta:https:github.com/inobulles/aquabsd-core/releases/download/v0.1.1-beta/kernel.txz:47144808:6674891dfbdc6aa7b8ef04fda3330bbf76dd78d24d06f3909e0e8afe82c209a8\n"
 ;
+
+// vim: nospell

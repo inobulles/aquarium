@@ -16,7 +16,7 @@
 
 typedef char if_name_t[IFNAMSIZ];
 
-static int ifcreate(aquarium_vnet_t* vnet, char const* type, if_name_t name) {
+static int if_create(aquarium_vnet_t* vnet, char const* type, if_name_t name) {
 	struct ifreq ifr = {};
 	strlcpy(ifr.ifr_name, type, sizeof ifr.ifr_name);
 
@@ -38,12 +38,27 @@ static int ifcreate(aquarium_vnet_t* vnet, char const* type, if_name_t name) {
 	return 0;
 }
 
-static int ifdestroy(aquarium_vnet_t* vnet, if_name_t name) {
+static int if_destroy(aquarium_vnet_t* vnet, if_name_t name) {
 	struct ifreq ifr = {};
 	strcpy(ifr.ifr_name, name);
 
 	if (ioctl(vnet->sock, SIOCIFDESTROY, &ifr) < 0) {
 		warnx("ioctl(SIOCIFDESTROY, \"%s\"): %s", name, strerror(errno));
+		return -1;
+	}
+
+	return 0;
+}
+
+static int if_up(aquarium_vnet_t* vnet, if_name_t name) {
+	struct ifreq ifr = {
+		.ifr_flags = IFF_UP,
+	};
+
+	strcpy(ifr.ifr_name, name);
+
+	if (ioctl(vnet->sock, SIOCSIFFLAGS, &ifr) < 0) {
+		warnx("ioctl(SIOCSIFFLAGS, IFF_UP, \"%s\"): %s", name, strerror(errno));
 		return -1;
 	}
 
@@ -70,7 +85,7 @@ static int bridge_add(aquarium_vnet_t* vnet, if_name_t bridge, if_name_t name) {
 	return 0;
 }
 
-static int ifvnet(aquarium_vnet_t* vnet, if_name_t name, char* hash) {
+static int if_vnet(aquarium_vnet_t* vnet, if_name_t name, char* hash) {
 	int const jid = jail_getid(hash);
 
 	if (jid < 0) {
@@ -114,7 +129,7 @@ int aquarium_vnet_create(aquarium_vnet_t* vnet, char* bridge_name) {
 
 	// create epair interfaces
 
-	if (ifcreate(vnet, "epair", vnet->epair) < 0) {
+	if (if_create(vnet, "epair", vnet->epair) < 0) {
 		goto err_create;
 	}
 
@@ -124,7 +139,7 @@ int aquarium_vnet_create(aquarium_vnet_t* vnet, char* bridge_name) {
 	// if interface passed is not a bridge, create a new bridge and add that interface to it
 
 	if (strncmp(bridge_name, "bridge", 6) != 0) {
-		if (ifcreate(vnet, "bridge", vnet->bridge) < 0) {
+		if (if_create(vnet, "bridge", vnet->bridge) < 0) {
 			goto err_bridge_create;
 		}
 
@@ -141,10 +156,17 @@ int aquarium_vnet_create(aquarium_vnet_t* vnet, char* bridge_name) {
 		goto err_bridge_add;
 	}
 
+	// up the bridge
+
+	if (if_up(vnet, bridge_name) < 0) {
+		goto err_bridge_up;
+	}
+
 	// success 🎉
 
 	rv = 0;
 
+err_bridge_up:
 err_bridge_add:
 err_bridge_add_if:
 err_bridge_create:
@@ -164,11 +186,11 @@ void aquarium_vnet_destroy(aquarium_vnet_t* vnet) {
 		// epair*a and epair*b are linked at the driver level, such that destroying one always destroys the other and vice versa
 		// cf. sys/net/if_epair.c
 
-		ifdestroy(vnet, vnet->epair);
+		if_destroy(vnet, vnet->epair);
 	}
 
 	if (*vnet->bridge) {
-		ifdestroy(vnet, vnet->bridge);
+		if_destroy(vnet, vnet->bridge);
 	}
 
 	if (vnet->sock) {
@@ -177,5 +199,5 @@ void aquarium_vnet_destroy(aquarium_vnet_t* vnet) {
 }
 
 int aquarium_vnet_attach(aquarium_vnet_t* vnet, char* hash) {
-	return ifvnet(vnet, vnet->internal_epair, hash);
+	return if_vnet(vnet, vnet->internal_epair, hash);
 }

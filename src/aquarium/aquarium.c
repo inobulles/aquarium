@@ -17,7 +17,7 @@ static void usage(void) {
 	fprintf(stderr,
 		"usage: %1$s [-r base]\n"
 		"       %1$s [-r base] -c path [-t template] [-k kernel_template]\n"
-		"       %1$s [-r base] [-d rulesets] [-pv] [-h hostname] -e path\n"
+		"       %1$s [-r base] [-d rulesets] [-j jailparams] [-pv] [-h hostname] -e path\n"
 		"       %1$s [-r base] -i path -o image\n"
 		"       %1$s [-r base] -I drive [-t template] [-k kernel_template]\n"
 		"       %1$s [-r base] -l\n"
@@ -248,6 +248,28 @@ static void parse_rulesets(aquarium_opts_t* opts, char* rulesets) {
 	}
 }
 
+static void parse_jailparams(aquarium_opts_t* opts, char* jailparams) {
+	char* tok;
+
+	while ((tok = strsep(&jailparams, ","))) {
+		char* const pre_val = strchr(tok, '=');
+
+		if (pre_val == NULL) {
+			warnx("jailparam '%s' has no equals sign ('='), skipping", tok);
+			continue;
+		}
+
+		*pre_val = '\0';
+		char* val = pre_val + 1;
+
+		if (strcmp(val, "NULL") == 0) {
+			val = NULL;
+		}
+
+		aquarium_opts_add_jailparam(opts, tok, val);
+	}
+}
+
 // main function
 
 typedef int (*action_t) (aquarium_opts_t* opts);
@@ -265,7 +287,7 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:e:fh:i:I:k:lo:pr:st:T:vy:")) != -1) {
+	while ((c = getopt(argc, argv, "c:d:e:fh:i:I:j:k:lo:pr:st:T:vy:")) != -1) {
 		// general options
 
 		if (c == 'd') {
@@ -275,6 +297,10 @@ int main(int argc, char* argv[]) {
 
 		else if (c == 'h') {
 			opts->hostname = optarg;
+		}
+
+		else if (c == 'j') {
+			parse_jailparams(opts, optarg);
 		}
 
 		else if (c == 'p') {

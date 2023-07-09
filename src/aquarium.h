@@ -144,6 +144,7 @@ int aquarium_template_out(aquarium_opts_t* opts, char const* path, char const* o
 
 aquarium_os_t aquarium_os_info(char const* path);
 int aquarium_os_load_linux64_kmod(void);
+int aquarium_os_load_epair_kmod(void);
 
 int aquarium_create_struct(aquarium_opts_t* opts);
 int aquarium_create(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template);

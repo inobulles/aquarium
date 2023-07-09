@@ -72,3 +72,7 @@ static int load_kmod(char const* name) {
 int aquarium_os_load_linux64_kmod(void) {
 	return load_kmod("linux64");
 }
+
+int aquarium_os_load_epair_kmod(void) {
+	return load_kmod("if_epair");
+}

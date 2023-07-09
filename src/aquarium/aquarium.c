@@ -400,7 +400,7 @@ int main(int argc, char* argv[]) {
 		aquarium_opts_add_devfs_ruleset(opts, AQUARIUM_DEVFS_RULESET_UNHIDE_BASIC);
 		aquarium_opts_add_devfs_ruleset(opts, AQUARIUM_DEVFS_RULESET_UNHIDE_LOGIN);
 
-		if (opts->make_vnet) {
+		if (!opts->vnet_disable) {
 			aquarium_opts_add_devfs_ruleset(opts, AQUARIUM_DEVFS_RULESET_JAIL_VNET);
 		}
 	}

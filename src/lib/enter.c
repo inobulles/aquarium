@@ -2,19 +2,20 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/queue.h>
 #include <fs/devfs/devfs.h>
 #include <jail.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <semaphore.h>
 #include <sys/ioccom.h>
 #include <sys/param.h>
 #include <sys/jail.h>
 #include <sys/procctl.h>
-#include <sys/stat.h>
-#include <sys/uio.h>
 #include <sys/mount.h>
+#include <sys/stat.h>
+#include <sys/queue.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 #define TRY_UMOUNT(mountpoint) \
@@ -487,6 +488,14 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		goto hash_err;
 	}
 
+	// create semaphore name
+	// according to sem_open(3), semaphores must start with a slash on FreeBSD
+	// also make sure it's unlinked (but don't error if it doesn't exist)
+
+	char* sem_name;
+	if (asprintf(&sem_name, "/s%s", hash)) {}
+	sem_unlink(sem_name);
+
 	// attempt to get the jail ID
 	// if found, we can skip the jail creation step & attach ourselves to it right away
 	// this all happens in a child process, because jail_attach will steal our process
@@ -499,6 +508,21 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 	}
 
 	if (!pid) {
+		// create semaphore to signal when the jail is ready to receive the vnet
+		// easier to use named semaphores here than setting up shared memory for a mutex shared between processes
+
+		sem_t* sem = SEM_FAILED;
+
+		if (opts->vnet_bridge) {
+			sem = sem_open(sem_name, O_CREAT, 0200, 0);
+
+			if (sem == SEM_FAILED) {
+				warnx("sem_open(\"%s\", 0600): %s", sem_name, strerror(errno));
+			}
+		}
+
+		// if jail already exists, try entering it straight away
+
 		int const jid = jail_getid(hash);
 
 		struct jailparam args[64] = { 0 };
@@ -572,6 +596,11 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		}
 
 		// we're now inside of the aquarium
+		// if we have a semaphore, signal this
+
+		if (sem != SEM_FAILED && sem_post(sem) < 0) {
+			warnx("sem_post(\"%s\"): %s", sem_name, strerror(errno));
+		}
 
 	inside:
 
@@ -584,6 +613,26 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		_exit(EXIT_SUCCESS);
 	}
 
+	// wait for the jail to be ready before attaching the vnet to it
+
+	sem_t* sem = SEM_FAILED;
+
+	if (opts->vnet_bridge) {
+		sem = sem_open(sem_name, O_CREAT, 0400, 0);
+
+		if (sem == SEM_FAILED) {
+			warnx("sem_open(\"%s\", 0600): %s", sem_name, strerror(errno));
+		}
+
+		else if (sem_wait(sem) < 0) {
+			warnx("sem_wait(\"%s\"): %s", sem_name, strerror(errno));
+		}
+
+		// try it anyway, you never know and it costs nothing
+
+		aquarium_vnet_attach(&opts->vnet, hash);
+	}
+
 	// wait for child process
 
 	int const child_rv = __aquarium_wait_for_process(pid);
@@ -593,6 +642,14 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		goto child_err;
 	}
 
+	// try to close/unlink the semaphore
+
+	if (sem != SEM_FAILED) {
+		sem_close(sem);
+	}
+
+	sem_unlink(sem_name);
+
 	// success
 
 	rv = 0;
@@ -600,6 +657,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 child_err:
 fork_err:
 
+	free(sem_name);
 	free(hash);
 
 hash_err:

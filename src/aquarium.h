@@ -66,6 +66,7 @@ typedef struct {
 	char* hostname;
 	bool persist;
 	bool vnet_disable;
+	uint32_t max_children;
 
 	size_t jailparam_count;
 	char** jailparam_keys;

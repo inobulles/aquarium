@@ -3,7 +3,9 @@
 #include <err.h>
 #include <errno.h>
 #include <jail.h>
+#include <net/ethernet.h>
 #include <net/if.h>
+#include <net/if_bridgevar.h>
 #include <string.h>
 #include <sys/ioccom.h>
 #include <sys/sockio.h>
@@ -42,6 +44,26 @@ static int ifdestroy(aquarium_vnet_t* vnet, if_name_t name) {
 
 	if (ioctl(vnet->sock, SIOCIFDESTROY, &ifr) < 0) {
 		warnx("ioctl(SIOCIFDESTROY, \"%s\"): %s", name, strerror(errno));
+		return -1;
+	}
+
+	return 0;
+}
+
+static int bridge_add(aquarium_vnet_t* vnet, if_name_t bridge, if_name_t name) {
+	struct ifbreq req = {};
+	strcpy(req.ifbr_ifsname, name);
+
+	struct ifdrv ifd = {
+		.ifd_cmd = BRDGADD,
+		.ifd_len = sizeof req,
+		.ifd_data = &req,
+	};
+
+	strcpy(ifd.ifd_name, bridge);
+
+	if (ioctl(vnet->sock, SIOCSDRVSPEC, &ifd) < 0) {
+		warnx("ioctl(SIOCSDRVSPEC.BRDGADD, add \"%s\" to \"%s\"): %s", name, bridge, strerror(errno));
 		return -1;
 	}
 
@@ -99,18 +121,17 @@ int aquarium_vnet_create(aquarium_vnet_t* vnet, char* bridge_name) {
 	strcpy(vnet->internal_epair, vnet->epair);
 	vnet->internal_epair[strlen(vnet->epair) - 1] = 'b';
 
-	// if interface passed is not a bridge, create a new bridge
+	// add external epair interface to bridge
 
-	if (strncmp(bridge_name, "bridge", 6) != 0) {
-		printf("TODO interface %s is not a bridge\n", bridge_name);
+	if (bridge_add(vnet, bridge_name, vnet->epair) < 0) {
+		goto err_bridge_add;
 	}
-
-	// TODO blablabla
 
 	// success 🎉
 
 	rv = 0;
 
+err_bridge_add:
 err_create:
 err_sock:
 err_kmod:

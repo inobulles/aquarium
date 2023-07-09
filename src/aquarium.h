@@ -2,9 +2,12 @@
 
 // TODO proper error handling with a nice traceback would be nice
 
+#include <err.h>
+#include <net/if.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -44,7 +47,18 @@ typedef enum {
 	AQUARIUM_DEVFS_RULESET_JAIL_VNET    = 5, // devfsrules_jail_vnet
 } aquarium_devfs_ruleset_t;
 
+// other typedefs
+
+typedef char aquarium_if_name_t[IFNAMSIZ];
+
 // structs
+
+typedef struct {
+	int sock;
+
+	aquarium_if_name_t epair;
+	aquarium_if_name_t internal_epair;
+} aquarium_vnet_t;
 
 typedef struct {
 	uid_t initial_uid;
@@ -149,6 +163,11 @@ int aquarium_format_create_zfs(aquarium_opts_t* opts, aquarium_drive_t* drive, c
 
 int aquarium_img_populate_esp(char const* path, char const* stage);
 int aquarium_img_out(aquarium_opts_t* opts, char const* path, char const* out);
+
+int aquarium_vnet_create(aquarium_vnet_t* vnet, char* bridge_name);
+void aquarium_vnet_destroy(aquarium_vnet_t* vnet);
+
+int aquarium_vnet_attach(aquarium_vnet_t* vnet, char* hash);
 
 // internal macros & functions common to all source files
 

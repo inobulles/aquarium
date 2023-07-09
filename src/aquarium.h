@@ -183,6 +183,10 @@ __attribute__((unused)) static int __aquarium_wait_for_process(pid_t pid) {
 	while (waitpid(pid, &wstatus, 0) > 0);
 
 	if (WIFSIGNALED(wstatus)) {
+		if (WTERMSIG(wstatus) == SIGSEGV) {
+			warnx("(Segmentation fault)");
+		}
+
 		return EXIT_FAILURE;
 	}
 

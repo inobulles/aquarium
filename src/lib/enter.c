@@ -52,6 +52,11 @@ static char* jailparam_from_const_ptr(char* buf, size_t n, void const* x) {
 #define false ((bool) 0)
 
 #define JAILPARAM(key, val) do { \
+	if (args_len > nitems(args)) { \
+		warnx("Trying to pass more jailparams than the maximum allowed (%zu, total)!", nitems(args)); \
+		continue; \
+	} \
+	\
 	char buf[256]; \
 	\
 	char* const _val = _Generic((val), \
@@ -62,7 +67,11 @@ static char* jailparam_from_const_ptr(char* buf, size_t n, void const* x) {
 		char const*: jailparam_from_const_ptr \
 	)(buf, sizeof buf, (val)); \
 	\
-	jailparam_init  (&args[args_len], (key)); \
+	if (jailparam_init(&args[args_len], (key)) < 0) { \
+		warnx("jailparam_init: Unknown jail parameter \"%s\" - are you sure it isn't a pseudo-jailparam?", (key)); \
+		continue; \
+	} \
+	\
 	jailparam_import(&args[args_len], _val); \
 	\
 	args_len++; \
@@ -486,7 +495,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 	if (!pid) {
 		int const jid = jail_getid(hash);
 
-		struct jailparam args[16] = { 0 };
+		struct jailparam args[64] = { 0 };
 		size_t args_len = 0;
 
 		if (jid >= 0) {

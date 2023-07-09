@@ -121,6 +121,20 @@ int aquarium_vnet_create(aquarium_vnet_t* vnet, char* bridge_name) {
 	strcpy(vnet->internal_epair, vnet->epair);
 	vnet->internal_epair[strlen(vnet->epair) - 1] = 'b';
 
+	// if interface passed is not a bridge, create a new bridge and add that interface to it
+
+	if (strncmp(bridge_name, "bridge", 6) != 0) {
+		if (ifcreate(vnet, "bridge", vnet->bridge) < 0) {
+			goto err_bridge_create;
+		}
+
+		if (bridge_add(vnet, vnet->bridge, bridge_name /* not a bridge here */)) {
+			goto err_bridge_add_if;
+		}
+
+		bridge_name = vnet->bridge;
+	}
+
 	// add external epair interface to bridge
 
 	if (bridge_add(vnet, bridge_name, vnet->epair) < 0) {
@@ -132,6 +146,8 @@ int aquarium_vnet_create(aquarium_vnet_t* vnet, char* bridge_name) {
 	rv = 0;
 
 err_bridge_add:
+err_bridge_add_if:
+err_bridge_create:
 err_create:
 err_sock:
 err_kmod:
@@ -149,6 +165,10 @@ void aquarium_vnet_destroy(aquarium_vnet_t* vnet) {
 		// cf. sys/net/if_epair.c
 
 		ifdestroy(vnet, vnet->epair);
+	}
+
+	if (*vnet->bridge) {
+		ifdestroy(vnet, vnet->bridge);
 	}
 
 	if (vnet->sock) {

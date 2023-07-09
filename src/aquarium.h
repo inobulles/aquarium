@@ -58,6 +58,7 @@ typedef struct {
 
 	aquarium_if_name_t epair;
 	aquarium_if_name_t internal_epair;
+	aquarium_if_name_t bridge;
 } aquarium_vnet_t;
 
 typedef struct {

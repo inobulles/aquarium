@@ -380,6 +380,22 @@ int main(int argc, char* argv[]) {
 		usage();
 	}
 
+	// a non-zero amount of children means we want to allow nesting
+	// that means we also probably want to also allow FS mounting
+	// this will overwrite jailparams, so use children.max instead of -m if that's not what you want!
+
+	if (opts->max_children) {
+		aquarium_opts_add_jailparam(opts, "allow.mount", "true");
+		aquarium_opts_add_jailparam(opts, "enforce_statfs", "1");
+
+		aquarium_opts_add_jailparam(opts, "allow.mount.tmpfs", "true");
+		aquarium_opts_add_jailparam(opts, "allow.mount.devfs", "true");
+		aquarium_opts_add_jailparam(opts, "allow.mount.fdescfs", "true");
+		aquarium_opts_add_jailparam(opts, "allow.mount.procfs", "true");
+		aquarium_opts_add_jailparam(opts, "allow.mount.linsysfs", "true");
+		aquarium_opts_add_jailparam(opts, "allow.mount.linprocfs", "true");
+	}
+
 	if (default_ruleset) {
 		aquarium_opts_add_ruleset(opts, 2);
 		aquarium_opts_add_ruleset(opts, 3);

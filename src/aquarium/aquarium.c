@@ -7,7 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 
-static char* template = "amd64.aquabsd.1222a";
+static char* template = "amd64.aquabsd.0.1.1-beta";
 static char* kernel_template = NULL;
 
 static char* out_path = NULL;

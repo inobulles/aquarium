@@ -495,7 +495,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 	if (!pid) {
 		int const jid = jail_getid(hash);
 
-		struct jailparam args[16] = { 0 };
+		struct jailparam args[64] = { 0 };
 		size_t args_len = 0;
 
 		if (jid >= 0) {

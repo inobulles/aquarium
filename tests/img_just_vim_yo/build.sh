@@ -2,7 +2,7 @@
 set -xe
 
 aquarium="../../bin/aquarium -r /tmp/aquariums"
-version="0.1.0-beta"
+version="0.1.1-beta"
 pointer="aquarium"
 
 rm -f $pointer

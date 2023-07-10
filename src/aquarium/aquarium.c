@@ -386,10 +386,6 @@ int main(int argc, char* argv[]) {
 
 	// bunch of sanity checks
 
-	if (opts->vnet_bridge && opts->persist) {
-		errx(EXIT_FAILURE, "can't use both -v and -p at the same time");
-	}
-
 	if (opts->dhcp && !opts->vnet_bridge) {
 		errx(EXIT_FAILURE, "can't use -D without using -v");
 	}

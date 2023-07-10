@@ -79,7 +79,7 @@ static char* jailparam_from_const_ptr(char* buf, size_t n, void const* x) {
 } while (0)
 
 #define CHILD_EXIT(val) do { \
-	sem != SEM_FAILED && sem_post(sem); \
+	c2p_sem != SEM_FAILED && sem_post(c2p_sem); \
 	_exit((val)); \
 } while (0)
 
@@ -232,6 +232,54 @@ devfsio_err:
 	devfs_close(fd);
 
 open_err:
+
+	return rv;
+}
+
+// these functions are just here so we don't have to deal with printing errors ourselves
+
+static sem_t* try_sem_open(char* name, mode_t mode) {
+	sem_t* const sem = sem_open(name, O_CREAT, mode, 0 /* initial value */);
+
+	if (sem == SEM_FAILED) {
+		warnx("sem_open(\"%s\", 0%o): %s", name, mode, strerror(errno));
+	}
+
+	return sem;
+}
+
+static void try_sem_unlink(sem_t* sem, char* name) {
+	if (sem != SEM_FAILED) {
+		sem_close(sem);
+	}
+
+	sem_unlink(name);
+}
+
+static int try_sem_post(sem_t* sem, char* name) {
+	if (sem == SEM_FAILED) {
+		return 0;
+	}
+
+	int const rv = sem_post(sem);
+
+	if (rv < 0) {
+		warnx("sem_post(\"%s\"): %s", name, strerror(errno));
+	}
+
+	return rv;
+}
+
+static int try_sem_wait(sem_t* sem, char* name) {
+	if (sem == SEM_FAILED) {
+		return 0;
+	}
+
+	int const rv = sem_wait(sem);
+
+	if (rv < 0) {
+		warnx("sem_wait(\"%s\"): %s", name, strerror(errno));
+	}
 
 	return rv;
 }
@@ -502,6 +550,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 	}
 
 	// create vnet (if needed)
+	// TODO don't do this if jail already exists
 
 	if (opts->vnet_bridge && aquarium_vnet_create(&opts->vnet, opts->vnet_bridge) < 0) {
 		goto vnet_err;
@@ -556,15 +605,22 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		goto hash_err;
 	}
 
-	// create semaphore name
+	// create semaphore names
 	// according to sem_open(3), semaphores must start with a slash on FreeBSD
-	// also make sure it's unlinked (but don't error if it doesn't exist)
+	// also make sure they're unlinked (but don't error if they don't exist)
 
-	char* sem_name;
-	if (asprintf(&sem_name, "/s%s", hash)) {}
-	sem_unlink(sem_name);
+	char* p2c_sem_name;
+	if (asprintf(&p2c_sem_name, "/s%s", hash)) {}
+	sem_unlink(p2c_sem_name);
+
+	char* c2p_sem_name;
+	if (asprintf(&c2p_sem_name, "/r%s", hash)) {}
+	sem_unlink(c2p_sem_name);
 
 	// attempt to get the jail ID
+
+	int const jid = jail_getid(hash);
+
 	// if found, we can skip the jail creation step & attach ourselves to it right away
 	// this all happens in a child process, because jail_attach will steal our process
 
@@ -576,22 +632,22 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 	}
 
 	if (!pid) {
-		// create semaphore to signal when the jail is ready to receive the vnet
+		// TODO update comment
+		// create semaphores to signal when the jail is ready to receive the vnet
 		// easier to use named semaphores here than setting up shared memory for a mutex shared between processes
 
-		sem_t* sem = SEM_FAILED;
+		sem_t* c2p_sem = SEM_FAILED;
+		sem_t* p2c_sem = SEM_FAILED;
 
 		if (opts->vnet_bridge) {
-			sem = sem_open(sem_name, O_CREAT, 0200, 0);
+			c2p_sem = try_sem_open(c2p_sem_name, 0200);
+		}
 
-			if (sem == SEM_FAILED) {
-				warnx("sem_open(\"%s\", 0600): %s", sem_name, strerror(errno));
-			}
+		if (opts->dhcp) {
+			p2c_sem = try_sem_open(p2c_sem_name, 0400);
 		}
 
 		// if jail already exists, try entering it straight away
-
-		int const jid = jail_getid(hash);
 
 		struct jailparam args[64] = { 0 };
 		size_t args_len = 0;
@@ -666,8 +722,16 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		// we're now inside of the aquarium
 		// if we have a semaphore, signal this
 
-		if (sem != SEM_FAILED && sem_post(sem) < 0) {
-			warnx("sem_post(\"%s\"): %s", sem_name, strerror(errno));
+		try_sem_post(c2p_sem, c2p_sem_name);
+
+		// if DHCP is enabled, wait for parent to signal BPF is ready
+
+		if (opts->dhcp) {
+			try_sem_wait(p2c_sem, p2c_sem_name);
+			system("ifconfig; ls /dev");
+			aquarium_vnet_dhcp(&opts->vnet);
+			// TODO we don't seem to clean up correctly when interrupting dhclient?
+			try_sem_post(c2p_sem, c2p_sem_name);
 		}
 
 	inside:
@@ -682,23 +746,49 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 	}
 
 	// wait for the jail to be ready before attaching the vnet to it
+	// only do this if jail isn't already created
 
-	sem_t* sem = SEM_FAILED;
+	sem_t* p2c_sem = SEM_FAILED;
+	sem_t* c2p_sem = SEM_FAILED;
 
-	if (opts->vnet_bridge) {
-		sem = sem_open(sem_name, O_CREAT, 0400, 0);
+	if (jid < 0 && opts->vnet_bridge) {
+		p2c_sem = try_sem_open(p2c_sem_name, 0200);
+		c2p_sem = try_sem_open(c2p_sem_name, 0400);
 
-		if (sem == SEM_FAILED) {
-			warnx("sem_open(\"%s\", 0600): %s", sem_name, strerror(errno));
-		}
-
-		else if (sem_wait(sem) < 0) {
-			warnx("sem_wait(\"%s\"): %s", sem_name, strerror(errno));
-		}
+		try_sem_wait(c2p_sem, c2p_sem_name);
 
 		// try it anyway, you never know and it costs nothing
 
 		aquarium_vnet_attach(&opts->vnet, hash);
+
+		// if DHCP is enabled, unhide just the /dev/bpf device
+		// skip if it already exists
+
+		bool const bpf_exists = devfs_has_dev("dev/bpf");
+
+		if (opts->dhcp && !bpf_exists) {
+			int const fd = devfs_open("dev");
+
+			if (fd < 0) {
+				// ...
+			}
+
+			if (devfs_unhide(fd, "bpf*") < 0) {
+				// ...
+			}
+
+			// TODO still do this if bpf already exists ofc
+
+			try_sem_post(p2c_sem, p2c_sem_name);
+			printf("between parent\n");
+			try_sem_wait(c2p_sem, c2p_sem_name);
+
+			if (devfs_hide(fd, "bpf*") < 0) {
+				// ...
+			}
+
+			devfs_close(fd);
+		}
 	}
 
 	// wait for child process
@@ -710,22 +800,19 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		goto child_err;
 	}
 
-	// try to close/unlink the semaphore
-
-	if (sem != SEM_FAILED) {
-		sem_close(sem);
-	}
-
-	sem_unlink(sem_name);
-
 	// success
 
 	rv = 0;
 
 child_err:
+
+	try_sem_unlink(p2c_sem, p2c_sem_name);
+	try_sem_unlink(c2p_sem, c2p_sem_name);
+
 fork_err:
 
-	free(sem_name);
+	free(p2c_sem_name);
+	free(c2p_sem_name);
 	free(hash);
 
 hash_err:

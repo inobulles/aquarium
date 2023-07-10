@@ -724,8 +724,13 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		if (do_dhcp) {
 			try_sem_wait(p2c_sem, p2c_sem_name);
 			aquarium_vnet_dhcp(&opts->vnet);
-			// TODO we don't seem to clean up correctly when interrupting dhclient?
 			try_sem_post(c2p_sem, c2p_sem_name);
+		}
+
+		// just in case...
+
+		if (c2p_sem != SEM_FAILED) {
+			sem_post(c2p_sem);
 		}
 
 	inside:
@@ -733,10 +738,10 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		// call the passed callback function
 
 		if (!opts->persist && cb(param) < 0) {
-			CHILD_EXIT(EXIT_FAILURE);
+			_exit(EXIT_FAILURE);
 		}
 
-		CHILD_EXIT(EXIT_SUCCESS);
+		_exit(EXIT_SUCCESS);
 	}
 
 	// wait for the jail to be ready before attaching the vnet to it
@@ -774,7 +779,6 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 			// TODO still do this if bpf already exists ofc
 
 			try_sem_post(p2c_sem, p2c_sem_name);
-			printf("between parent\n");
 			try_sem_wait(c2p_sem, c2p_sem_name);
 
 			if (devfs_hide(fd, "bpf*") < 0) {

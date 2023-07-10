@@ -52,6 +52,8 @@ aquarium_opts_t* aquarium_opts_create(void) {
 	// jail options
 
 	opts->persist = false;
+	opts->dhcp = false;
+	opts->max_children = 0;
 	opts->vnet_bridge = NULL;
 
 	// skip this stuff if we're root

@@ -115,7 +115,7 @@ int aquarium_vnet_create(aquarium_vnet_t* vnet, char* bridge_name) {
 	// this is necessary to create the epair interface cloner in the first place
 
 	if (aquarium_os_load_epair_kmod() < 0) {
-		goto err_kmod;
+		goto err_kmod_epair;
 	}
 
 	// connection to API
@@ -139,6 +139,10 @@ int aquarium_vnet_create(aquarium_vnet_t* vnet, char* bridge_name) {
 	// if interface passed is not a bridge, create a new bridge and add that interface to it
 
 	if (strncmp(bridge_name, "bridge", 6) != 0) {
+		if (aquarium_os_load_bridge_kmod() < 0) {
+			goto err_kmod_bridge;
+		}
+
 		if (if_create(vnet, "bridge", vnet->bridge) < 0) {
 			goto err_bridge_create;
 		}
@@ -162,17 +166,25 @@ int aquarium_vnet_create(aquarium_vnet_t* vnet, char* bridge_name) {
 		goto err_bridge_up;
 	}
 
+	// up the external epair
+
+	if (if_up(vnet, vnet->epair) < 0) {
+		goto err_epair_up;
+	}
+
 	// success 🎉
 
 	rv = 0;
 
+err_epair_up:
 err_bridge_up:
 err_bridge_add:
 err_bridge_add_if:
 err_bridge_create:
+err_kmod_bridge:
 err_create:
 err_sock:
-err_kmod:
+err_kmod_epair:
 
 	if (rv < 0) {
 		aquarium_vnet_destroy(vnet);

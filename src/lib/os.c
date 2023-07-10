@@ -76,3 +76,7 @@ int aquarium_os_load_linux64_kmod(void) {
 int aquarium_os_load_epair_kmod(void) {
 	return load_kmod("if_epair");
 }
+
+int aquarium_os_load_bridge_kmod(void) {
+	return load_kmod("if_bridge");
+}

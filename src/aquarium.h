@@ -149,6 +149,7 @@ int aquarium_template_out(aquarium_opts_t* opts, char const* path, char const* o
 aquarium_os_t aquarium_os_info(char const* path);
 int aquarium_os_load_linux64_kmod(void);
 int aquarium_os_load_epair_kmod(void);
+int aquarium_os_load_bridge_kmod(void);
 
 int aquarium_create_struct(aquarium_opts_t* opts);
 int aquarium_create(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template);
@@ -172,8 +173,8 @@ int aquarium_img_out(aquarium_opts_t* opts, char const* path, char const* out);
 int aquarium_vnet_create(aquarium_vnet_t* vnet, char* bridge_name);
 void aquarium_vnet_destroy(aquarium_vnet_t* vnet);
 
-int aquarium_vnet_dhcp(aquarium_vnet_t* vnet);
 int aquarium_vnet_attach(aquarium_vnet_t* vnet, char* hash);
+int aquarium_vnet_dhcp(aquarium_vnet_t* vnet);
 
 // internal macros & functions common to all source files
 

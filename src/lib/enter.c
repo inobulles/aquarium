@@ -760,32 +760,41 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 
 		aquarium_vnet_attach(&opts->vnet, hash);
 
-		// if DHCP is enabled, unhide just the /dev/bpf device
+		// if DHCP is enabled, unhide just the /dev/bpf* device
 		// skip if it already exists
 
-		bool const bpf_exists = devfs_has_dev("dev/bpf");
+		if (do_dhcp) {
+			bool const bpf_exists = devfs_has_dev("dev/bpf");
+			int fd;
 
-		if (do_dhcp && !bpf_exists) {
-			int const fd = devfs_open("dev");
+			// unhide /dev/bpf* (if needed)
 
-			if (fd < 0) {
-				// ...
+			if (!bpf_exists) {
+				fd = devfs_open("dev");
+
+				if (fd < 0) {
+					// ...
+				}
+
+				if (devfs_unhide(fd, "bpf*") < 0) {
+					// ...
+				}
 			}
 
-			if (devfs_unhide(fd, "bpf*") < 0) {
-				// ...
-			}
-
-			// TODO still do this if bpf already exists ofc
+			// signal to child it can start dhclient and wait for it to signal it's done
 
 			try_sem_post(p2c_sem, p2c_sem_name);
 			try_sem_wait(c2p_sem, c2p_sem_name);
 
-			if (devfs_hide(fd, "bpf*") < 0) {
-				// ...
-			}
+			// hide /dev/bpf* (if needed)
 
-			devfs_close(fd);
+			if (!bpf_exists) {
+				if (devfs_hide(fd, "bpf*") < 0) {
+					// ...
+				}
+
+				devfs_close(fd);
+			}
 		}
 	}
 

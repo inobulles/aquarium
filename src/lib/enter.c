@@ -641,8 +641,9 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 			goto inside;
 		}
 
-		// TODO update comment
-		// create semaphores to signal when the jail is ready to receive the vnet
+		// create semaphores:
+		// - c2p_sem: to signal the parent when the jail is ready to receive the vnet or when dhclient is done
+		// - p2c_sem: to know when the vnet is attached so we can run dhclient
 		// easier to use named semaphores here than setting up shared memory for a mutex shared between processes
 
 		sem_t* c2p_sem = SEM_FAILED;

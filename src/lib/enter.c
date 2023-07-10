@@ -773,11 +773,11 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 				fd = devfs_open("dev");
 
 				if (fd < 0) {
-					// ...
+					goto err_dhcp;
 				}
 
 				if (devfs_unhide(fd, "bpf*") < 0) {
-					// ...
+					goto err_unhide;
 				}
 			}
 
@@ -789,12 +789,14 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 			// hide /dev/bpf* (if needed)
 
 			if (!bpf_exists) {
-				if (devfs_hide(fd, "bpf*") < 0) {
-					// ...
-				}
+				devfs_hide(fd, "bpf*");
+
+err_unhide:
 
 				devfs_close(fd);
 			}
+
+err_dhcp: {}
 		}
 	}
 

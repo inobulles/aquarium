@@ -91,6 +91,7 @@ typedef struct {
 
 	char* hostname;
 	bool persist;
+	bool dhcp;
 	uint32_t max_children;
 
 	size_t jailparam_count;

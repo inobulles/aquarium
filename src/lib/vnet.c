@@ -14,9 +14,7 @@
 // XXX using ioctl API rather than Netlink
 //     see #36
 
-typedef char if_name_t[IFNAMSIZ];
-
-static int if_create(aquarium_vnet_t* vnet, char const* type, if_name_t name) {
+static int if_create(aquarium_vnet_t* vnet, char const* type, aquarium_if_name_t name) {
 	struct ifreq ifr = {};
 	strlcpy(ifr.ifr_name, type, sizeof ifr.ifr_name);
 
@@ -38,7 +36,7 @@ static int if_create(aquarium_vnet_t* vnet, char const* type, if_name_t name) {
 	return 0;
 }
 
-static int if_destroy(aquarium_vnet_t* vnet, if_name_t name) {
+static int if_destroy(aquarium_vnet_t* vnet, aquarium_if_name_t name) {
 	struct ifreq ifr = {};
 	strcpy(ifr.ifr_name, name);
 
@@ -50,7 +48,7 @@ static int if_destroy(aquarium_vnet_t* vnet, if_name_t name) {
 	return 0;
 }
 
-static int if_up(aquarium_vnet_t* vnet, if_name_t name) {
+static int if_up(aquarium_vnet_t* vnet, aquarium_if_name_t name) {
 	struct ifreq ifr = {
 		.ifr_flags = IFF_UP,
 	};
@@ -65,7 +63,7 @@ static int if_up(aquarium_vnet_t* vnet, if_name_t name) {
 	return 0;
 }
 
-static int bridge_add(aquarium_vnet_t* vnet, if_name_t bridge, if_name_t name) {
+static int bridge_add(aquarium_vnet_t* vnet, aquarium_if_name_t bridge, aquarium_if_name_t name) {
 	struct ifbreq req = {};
 	strcpy(req.ifbr_ifsname, name);
 
@@ -85,7 +83,7 @@ static int bridge_add(aquarium_vnet_t* vnet, if_name_t bridge, if_name_t name) {
 	return 0;
 }
 
-static int if_vnet(aquarium_vnet_t* vnet, if_name_t name, char* hash) {
+static int if_vnet(aquarium_vnet_t* vnet, aquarium_if_name_t name, char* hash) {
 	int const jid = jail_getid(hash);
 
 	if (jid < 0) {

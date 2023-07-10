@@ -140,20 +140,75 @@ static int recursive_umount(char* path) {
 	}
 }
 
-static int devfs_ruleset(aquarium_opts_t* opts) {
-	int rv = -1;
-
-	int const devfs_fd = open("dev", O_RDONLY);
+static int devfs_open(char const* path) {
+	int const devfs_fd = open(path, O_RDONLY);
 
 	if (devfs_fd < 0) {
-		warnx("open(\"dev\"): %s", strerror(errno));
+		warnx("open(\"%s\"): %s", path, strerror(errno));
+	}
+
+	return devfs_fd;
+}
+
+static void devfs_close(int fd) {
+	close(fd);
+}
+
+static bool devfs_has_dev(char const* path) {
+	char* full;
+	if (asprintf(&full, "dev/%s", path)) {}
+
+	bool const has = access(full, F_OK) == 0;
+	free(full);
+
+	return has;
+}
+
+static int devfs_rule(int fd, int dr_bacts, char const* path) {
+	// add path $path unhide
+
+	struct devfs_rule dr = {
+		.dr_magic = DEVFS_MAGIC,
+		.dr_iacts = DRA_BACTS,
+		.dr_bacts = dr_bacts,
+		.dr_icond = DRC_PATHPTRN,
+	};
+
+	size_t const copied = strlcpy(dr.dr_pathptrn, path, DEVFS_MAXPTRNLEN);
+
+	if (copied >= DEVFS_MAXPTRNLEN) {
+		warnx("\"%s\" too long (%zu >= %d); truncated", path, copied, DEVFS_MAXPTRNLEN);
+	}
+
+	if (ioctl(fd, DEVFSIO_RAPPLY, &dr) < 0) {
+		warnx("DEVFSIO_RAPPLY(%s \"%s\"): %s", dr_bacts == DRB_HIDE ? "hide" : "unhide", path, strerror(errno));
+		return -1;
+	}
+
+	return 0;
+}
+
+static int devfs_hide(int fd, char const* path) {
+	return devfs_rule(fd, DRB_HIDE, path);
+}
+
+static int devfs_unhide(int fd, char const* path) {
+	return devfs_rule(fd, DRB_UNHIDE, path);
+}
+
+static int devfs_apply_opts(aquarium_opts_t* opts) {
+	int rv = -1;
+
+	int const fd = devfs_open("dev");
+
+	if (fd < 0) {
 		goto open_err;
 	}
 
 	#define APPLY_RULESET(__ruleset) do { \
 		devfs_rsnum const _ruleset = (__ruleset); \
 		\
-		if (ioctl(devfs_fd, DEVFSIO_SAPPLY, &_ruleset) < 0) { \
+		if (ioctl(fd, DEVFSIO_SAPPLY, &_ruleset) < 0) { \
 			warnx("DEVFSIO_SAPPLY(%d): %s", _ruleset, strerror(errno)); \
 			goto devfsio_err; \
 		} \
@@ -174,7 +229,7 @@ static int devfs_ruleset(aquarium_opts_t* opts) {
 
 devfsio_err:
 
-	close(devfs_fd);
+	devfs_close(fd);
 
 open_err:
 
@@ -472,11 +527,11 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		goto os_setup_err;
 	}
 
-	// set the correct ruleset for devfs
+	// set the correct rulesets for devfs
 	// this comes last, so any setup scripts still have full access to the devfs filesystem
 
-	if (devfs_ruleset(opts) < 0) {
-		goto devfs_ruleset_err;
+	if (devfs_apply_opts(opts) < 0) {
+		goto devfs_apply_err;
 	}
 
 	// actually enter the aquarium
@@ -679,7 +734,7 @@ hash_err:
 procctl_err:
 #endif
 
-devfs_ruleset_err:
+devfs_apply_err:
 
 	if (aquarium_enter_setdown(path, os) < 0) {
 		rv = -1;

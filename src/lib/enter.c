@@ -549,20 +549,29 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		goto mount_devfs_err;
 	}
 
+	// find aquarium path hash
+	// this is what's used to refer to the aquarium's jail by name
+
+	char* const hash = __aquarium_hash(path);
+
+	if (!hash) {
+		warnx("Failed to hash '%s'", path);
+		goto hash_err;
+	}
+
+	// attempt to get the jail ID
+
+	int const jid = jail_getid(hash);
+	bool const already_exists = jid >= 0;
+
 	// create vnet (if needed)
-	// TODO don't do this if jail already exists
 
-	if (opts->vnet_bridge && aquarium_vnet_create(&opts->vnet, opts->vnet_bridge) < 0) {
+	bool const create_vnet = !already_exists && opts->vnet_bridge;
+	bool const do_dhcp = create_vnet && opts->dhcp;
+
+	if (create_vnet && aquarium_vnet_create(&opts->vnet, opts->vnet_bridge) < 0) {
 		goto vnet_err;
 	}
-
-	/*
-	// get IP address for internal epair
-
-	if (opts->vnet_bridge && aquarium_vnet_dhcp(&opts->vnet) < 0) {
-		goto vnet_err;
-	}
-	*/
 
 	// OS-specific actions
 
@@ -595,16 +604,6 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 	}
 #endif
 
-	// find aquarium path hash
-	// this is what's used to refer to the aquarium's jail by name
-
-	char* const hash = __aquarium_hash(path);
-
-	if (!hash) {
-		warnx("Failed to hash '%s'", path);
-		goto hash_err;
-	}
-
 	// create semaphore names
 	// according to sem_open(3), semaphores must start with a slash on FreeBSD
 	// also make sure they're unlinked (but don't error if they don't exist)
@@ -617,10 +616,6 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 	if (asprintf(&c2p_sem_name, "/r%s", hash)) {}
 	sem_unlink(c2p_sem_name);
 
-	// attempt to get the jail ID
-
-	int const jid = jail_getid(hash);
-
 	// if found, we can skip the jail creation step & attach ourselves to it right away
 	// this all happens in a child process, because jail_attach will steal our process
 
@@ -632,21 +627,6 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 	}
 
 	if (!pid) {
-		// TODO update comment
-		// create semaphores to signal when the jail is ready to receive the vnet
-		// easier to use named semaphores here than setting up shared memory for a mutex shared between processes
-
-		sem_t* c2p_sem = SEM_FAILED;
-		sem_t* p2c_sem = SEM_FAILED;
-
-		if (opts->vnet_bridge) {
-			c2p_sem = try_sem_open(c2p_sem_name, 0200);
-		}
-
-		if (opts->dhcp) {
-			p2c_sem = try_sem_open(p2c_sem_name, 0400);
-		}
-
 		// if jail already exists, try entering it straight away
 
 		struct jailparam args[64] = { 0 };
@@ -655,10 +635,25 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		if (jid >= 0) {
 			if (jail_attach(jid) < 0) {
 				warnx("jail_attach(%d): %s", jid, strerror(errno));
-				CHILD_EXIT(EXIT_FAILURE);
+				_exit(EXIT_FAILURE);
 			}
 
 			goto inside;
+		}
+
+		// TODO update comment
+		// create semaphores to signal when the jail is ready to receive the vnet
+		// easier to use named semaphores here than setting up shared memory for a mutex shared between processes
+
+		sem_t* c2p_sem = SEM_FAILED;
+		sem_t* p2c_sem = SEM_FAILED;
+
+		if (create_vnet) {
+			c2p_sem = try_sem_open(c2p_sem_name, 0200);
+		}
+
+		if (do_dhcp) {
+			p2c_sem = try_sem_open(p2c_sem_name, 0400);
 		}
 
 		// find a hostname for the jail
@@ -694,7 +689,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 		JAILPARAM("allow.socket_af", true);
 		JAILPARAM("children.max", opts->max_children);
 
-		if (opts->vnet_bridge) {
+		if (create_vnet) {
 			JAILPARAM("vnet", "new");
 		}
 
@@ -726,9 +721,8 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 
 		// if DHCP is enabled, wait for parent to signal BPF is ready
 
-		if (opts->dhcp) {
+		if (do_dhcp) {
 			try_sem_wait(p2c_sem, p2c_sem_name);
-			system("ifconfig; ls /dev");
 			aquarium_vnet_dhcp(&opts->vnet);
 			// TODO we don't seem to clean up correctly when interrupting dhclient?
 			try_sem_post(c2p_sem, c2p_sem_name);
@@ -751,7 +745,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 	sem_t* p2c_sem = SEM_FAILED;
 	sem_t* c2p_sem = SEM_FAILED;
 
-	if (jid < 0 && opts->vnet_bridge) {
+	if (create_vnet) {
 		p2c_sem = try_sem_open(p2c_sem_name, 0200);
 		c2p_sem = try_sem_open(c2p_sem_name, 0400);
 
@@ -766,7 +760,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 
 		bool const bpf_exists = devfs_has_dev("dev/bpf");
 
-		if (opts->dhcp && !bpf_exists) {
+		if (do_dhcp && !bpf_exists) {
 			int const fd = devfs_open("dev");
 
 			if (fd < 0) {
@@ -813,9 +807,6 @@ fork_err:
 
 	free(p2c_sem_name);
 	free(c2p_sem_name);
-	free(hash);
-
-hash_err:
 
 #if __FreeBSD_version >= 1400026
 procctl_err:
@@ -829,13 +820,18 @@ devfs_apply_err:
 
 os_setup_err:
 
-	TRY_UMOUNT("dev")
-
-	if (opts->vnet_bridge && !opts->persist) {
+	if (create_vnet && (!opts->persist || rv < 0)) {
 		aquarium_vnet_destroy(&opts->vnet);
 	}
 
 vnet_err:
+
+	free(hash);
+
+hash_err:
+
+	TRY_UMOUNT("dev")
+
 mount_devfs_err:
 
 	TRY_UMOUNT("tmp")

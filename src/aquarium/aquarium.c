@@ -308,10 +308,14 @@ static int do_copy(aquarium_opts_t* opts) {
 		if (copy_recursive(source, abs_target)) {
 			return EXIT_FAILURE;
 		}
-	}
 
-	// TODO recursively set UID and GID of all copied files to 0
-	// this is probably not what the user wants, but better be safe than sorry - I don't see a better way for handling this ATM
+		// recursively set UID and GID of all copied files to 0
+		// this is probably not what the user wants, but better be safe than sorry - I don't see a better way for handling this ATM
+
+		if (chown_recursive(abs_target, 0, 0) < 0) {
+			return EXIT_FAILURE;
+		}
+	}
 
 	return EXIT_SUCCESS;
 }

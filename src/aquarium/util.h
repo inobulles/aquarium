@@ -255,3 +255,50 @@ err_mkdir:
 	fts_close(fts);
 	return rv;
 }
+
+static int chown_recursive(char* path, uid_t uid, gid_t gid) {
+	char* const path_argv[] = { path, NULL };
+	FTS* const fts = fts_open(path_argv, FTS_PHYSICAL | FTS_XDEV, NULL);
+
+	if (fts == NULL) {
+		warnx("fts_open(\"%s\"): %s", path, strerror(errno));
+		return -1;
+	}
+
+	for (FTSENT* ent; (ent = fts_read(fts));) {
+		char* const path = ent->fts_path; // shadow parent scope's 'path'
+
+		switch (ent->fts_info) {
+		case FTS_DP:
+
+			break; // ignore directories being visited in postorder
+
+		case FTS_DOT:
+
+			warnx("fts_read: Read a '.' or '..' entry, which shouldn't happen as the 'FTS_SEEDOT' option was not passed to 'fts_open'");
+			break;
+
+		case FTS_DNR:
+		case FTS_ERR:
+		case FTS_NS:
+
+			warnx("fts_read: Failed to read '%s': %s", path, strerror(errno));
+			break;
+
+		case FTS_SL:
+		case FTS_SLNONE:
+		case FTS_D:
+		case FTS_DC:
+		case FTS_F:
+		case FTS_DEFAULT:
+		default:
+
+			if (chown(path, uid, gid) < 0) {
+				warnx("chown(\"%s\", %d, %d): %s", path, uid, gid, strerror(errno));
+			}
+		}
+	}
+
+	fts_close(fts);
+	return 0;
+}

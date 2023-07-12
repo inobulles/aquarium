@@ -1,8 +1,11 @@
 #include <aquarium.h>
+#include "util.h"
+
 #include <dirent.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <fts.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -22,7 +25,8 @@ static void usage(void) {
 		"       %1$s [-r base] -I drive [-t template] [-k kernel_template]\n"
 		"       %1$s [-r base] -l\n"
 		"       %1$s [-r base] -s\n"
-		"       %1$s [-r base] -T path -o template\n",
+		"       %1$s [-r base] -T path -o template\n"
+		"       %1$s [-r base] -y path source_file ... target_directory\n",
 	getprogname());
 
 	exit(EXIT_FAILURE);
@@ -239,6 +243,79 @@ static int do_img_out(aquarium_opts_t* opts) {
 	return aquarium_img_out(opts, aquarium_path, out_path) < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
+static char** copy_args = NULL;
+static size_t copy_args_len = 0;
+
+static int do_copy(aquarium_opts_t* opts) {
+	char* const aquarium_path = aquarium_db_read_pointer_file(opts, path);
+
+	if (!aquarium_path) {
+		return EXIT_FAILURE;
+	}
+
+	char* const target = copy_args[--copy_args_len];
+
+	// make sure target directory doesn't refer to $HOME
+	// we have no [easy] way of getting the $HOME of the aquarium, and even if we did, what user should we assume?
+	// this doesn't stop shells from expanding '~', but it's better than nothing
+
+	if (*target == '~') {
+		warnx("target directory '%s' refers to $HOME ('~'), which is unsupported", target);
+		return EXIT_FAILURE;
+	}
+
+	// also make sure it doesn't contain any ".."'s, as that can be used to copy to outside of the aquarium
+	// XXX technically we could count these and path components to see if we really do break out of the aquarium, but that's a lot of work
+
+	if (strstr(target, "..")) {
+		warnx("target directory '%s' contains '..', which is unsupported", target);
+		return EXIT_FAILURE;
+	}
+
+	// make sure all files are (recursively) readable by the user
+
+	for (size_t i = 0; i < copy_args_len; i++) {
+		char* const source = copy_args[i];
+
+		if (!can_read_all(source)) {
+			warnx("user can't read all of \"%s\"", source);
+			return EXIT_FAILURE;
+		}
+	}
+
+	// once we're sure all the files are readable, setuid
+	// no need to set the UID back; from here on out, we stay as superuser
+
+	if (opts->initial_uid && setuid(0) < 0) {
+		warnx("setuid(0): %s", strerror(errno));
+		return EXIT_FAILURE;
+	}
+
+	// create target directory if it doesn't yet exist
+
+	char* abs_target;
+	if (asprintf(&abs_target, "%s/%s", aquarium_path, target)) {}
+
+	if (mkdir_recursive(abs_target) < 0) {
+		return EXIT_FAILURE;
+	}
+
+	// then, actually copy all the files recursively
+
+	while (copy_args_len --> 0) {
+		char* const source = copy_args[copy_args_len];
+
+		if (copy_recursive(source, abs_target)) {
+			return EXIT_FAILURE;
+		}
+	}
+
+	// TODO recursively set UID and GID of all copied files to 0
+	// this is probably not what the user wants, but better be safe than sorry - I don't see a better way for handling this ATM
+
+	return EXIT_SUCCESS;
+}
+
 static void parse_rulesets(aquarium_opts_t* opts, char* rulesets) {
 	char* tok;
 
@@ -358,6 +435,11 @@ int main(int argc, char* argv[]) {
 			path = optarg;
 		}
 
+		else if (c == 'y') {
+			action = do_copy;
+			path = optarg;
+		}
+
 		// name-passing options
 
 		else if (c == 'k') {
@@ -380,7 +462,12 @@ int main(int argc, char* argv[]) {
 	argc -= optind;
 	argv += optind;
 
-	if (argc) {
+	if (action == do_copy) {
+		copy_args = argv;
+		copy_args_len = argc;
+	}
+
+	else if (argc) {
 		usage();
 	}
 

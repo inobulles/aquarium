@@ -1,10 +1,11 @@
 // This Source Form is subject to the terms of the AQUA Software License, v. 1.0.
-// Copyright (c) 2023 Aymeric Wibo
+// Copyright (c) 2024 Aymeric Wibo
 
 #include <aquarium.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/queue.h> // XXX for fs/devfs/devfs.h
 #include <fs/devfs/devfs.h>
 #include <jail.h>
 #include <stdio.h>

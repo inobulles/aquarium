@@ -1,5 +1,5 @@
 // This Source Form is subject to the terms of the AQUA Software License, v. 1.0.
-// Copyright (c) 2023 Aymeric Wibo
+// Copyright (c) 2024 Aymeric Wibo
 
 #include <aquarium.h>
 #include "archive.h"
@@ -8,6 +8,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <openssl/sha.h>
+#include <openssl/evp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -31,7 +32,7 @@ typedef struct {
 	char* sha256;
 } sanctioned_t;
 
-static int fetch_template(sanctioned_t* sanctioned, char const* path, SHA256_CTX* sha_context, size_t* total_ref) {
+static int fetch_template(sanctioned_t* sanctioned, char const* path, EVP_MD_CTX* md_context, size_t* total_ref) {
 	// actually fetch the template
 	// it's initially downloaded with a '.' prefix, because otherwise, there's a potential for a race condition
 	// e.g., if we downloaded it in its final destination, the template could be malicious, and an actor could coerce the user into creating an aquarium from that template before the checks have terminated
@@ -60,7 +61,10 @@ static int fetch_template(sanctioned_t* sanctioned, char const* path, SHA256_CTX
 
 	// checking (size & hash) stuff
 
-	SHA256_Init(sha_context);
+	if (EVP_DigestInit(md_context, EVP_sha256()) != 1) {
+		warnx("EVP_DigestInit: failed to initialize SHA256 digest");
+		goto sha256_digest_init_err;
+	}
 
 	// start download
 
@@ -78,14 +82,14 @@ static int fetch_template(sanctioned_t* sanctioned, char const* path, SHA256_CTX
 			fflush(stdout);
 		}
 
-		SHA256_Update(sha_context, chunk, chunk_bytes);
+		EVP_DigestUpdate(md_context, chunk, chunk_bytes);
 
 		if (fwrite(chunk, 1, chunk_bytes, out_fp) < chunk_bytes) {
 			break;
 		}
 	}
 
-	printf("\rFinished             \n");
+	printf("\rFinished             \n"); // XXX extra spaces to clear out remaining progress characters
 
 	// success
 
@@ -93,6 +97,7 @@ static int fetch_template(sanctioned_t* sanctioned, char const* path, SHA256_CTX
 
 	fclose(remote_fp);
 
+sha256_digest_init_err:
 remote_open_err:
 
 	fclose(out_fp);
@@ -104,11 +109,15 @@ out_open_err:
 	return rv;
 }
 
-static int check_template(sanctioned_t* sanctioned, char const* path, size_t total, SHA256_CTX* sha_context) {
+static int check_template(sanctioned_t* sanctioned, char const* path, size_t total, EVP_MD_CTX* md_context) {
 	// get digest of hash
 
 	uint8_t hash[SHA256_DIGEST_LENGTH];
-	SHA256_Final(hash, sha_context);
+
+	if (EVP_DigestFinal(md_context, hash, NULL) != 1) {
+		warnx("EVP_DigestFinal: failed to finalize SHA256 digest");
+		goto err;
+	}
 
 	char hash_hex[SHA256_DIGEST_LENGTH * 2 + 1] = { 0 }; // each byte in the hash can be represented with two hex digits
 
@@ -248,10 +257,16 @@ found: {}
 
 	// found template, start downloading it
 
-	SHA256_CTX sha_context;
+	EVP_MD_CTX* const md_context = EVP_MD_CTX_new();
+
+	if (md_context == NULL) {
+		warnx("EVP_MD_CTX_new: failed to create message digest context");
+		goto md_context_err;
+	}
+
 	size_t total;
 
-	if (fetch_template(&sanctioned, temp_path, &sha_context, &total) < 0) {
+	if (fetch_template(&sanctioned, temp_path, md_context, &total) < 0) {
 		goto fetch_err;
 	}
 
@@ -259,7 +274,7 @@ found: {}
 	// "file://" protocol files aren't checked, because that would be annoying :P
 
 	if (strcmp(sanctioned.protocol, "file") != 0) {
-		if (check_template(&sanctioned, temp_path, total, &sha_context) < 0) {
+		if (check_template(&sanctioned, temp_path, total, md_context) < 0) {
 			goto check_err;
 		}
 	}
@@ -284,6 +299,10 @@ rename_err:
 
 check_err:
 fetch_err:
+
+	EVP_MD_CTX_free(md_context);
+
+md_context_err:
 
 	free(temp_path);
 

@@ -5,8 +5,8 @@ import bob
 
 # Compile library and frontend sources.
 
-let lib_src = Fs.list("src/lib").where(|path| path.endsWith(".c"))
-let cmd_src = Fs.list("src/aquarium").where(|path| path.endsWith(".c"))
+let lib_src = Fs.list("src/lib").where(|path| path.endswith(".c"))
+let cmd_src = Fs.list("src/aquarium").where(|path| path.endswith(".c"))
 
 let cc = Cc([
 	"-g", "-std=c11", "-fPIC",
@@ -25,7 +25,7 @@ let cmd = Linker(["-laquarium", "-larchive"]).link(cmd_obj)
 
 # Installation map.
 
-install_map = {
+install = {
 	archive: "lib/libaquarium.a",
 	dyn_lib: "lib/libaquarium.so",
 	cmd: "bin/aquarium",

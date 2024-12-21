@@ -5,6 +5,11 @@ import bob
 
 assert Platform.os() == "FreeBSD", "Aquariums are only supported on FreeBSD"
 
+deps = [
+	Dep.git("https://github.com/inobulles/libcopyfile", "v0.1.1"),
+	Dep.git("https://github.com/inobulles/libmkfs_msdos", "v0.1.0"),
+]
+
 # Compile library and frontend sources.
 
 let lib_src = Fs.list("src/lib").where(|path| path.endswith(".c"))
@@ -22,8 +27,8 @@ let cmd_obj = cc.compile(cmd_src)
 # Create static & dynamic libraries and frontend executable.
 
 let archive = Linker([]).archive(lib_obj)
-let dyn_lib = Linker(["-shared", "-larchive", "-lcrypto", "-lfetch", "-lgeom", "-ljail", "-lzfs"]).link(lib_obj)
-let cmd = Linker(["-laquarium", "-larchive"]).link(cmd_obj)
+let dyn_lib = Linker(["-shared", "-larchive", "-lcrypto", "-lfetch", "-lgeom", "-ljail", "-lzfs", "-lcopyfile", "-lmkfs_msdos"]).link(lib_obj)
+let cmd = Linker(["-laquarium", "-larchive", "-lcopyfile"]).link(cmd_obj)
 
 # Installation map.
 

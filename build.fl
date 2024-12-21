@@ -3,6 +3,8 @@
 
 import bob
 
+assert Platform.os() == "FreeBSD", "Aquariums are only supported on FreeBSD"
+
 # Compile library and frontend sources.
 
 let lib_src = Fs.list("src/lib").where(|path| path.endswith(".c"))

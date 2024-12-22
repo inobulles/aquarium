@@ -386,7 +386,7 @@ static zpool_handle_t* create_zfs_pool(libzfs_handle_t* handle, char const* name
 	}
 
 	ADD_PROP(root, root_err, string, ZPOOL_CONFIG_TYPE, VDEV_TYPE_ROOT);
-	ADD_PROP(root, root_err, nvlist_array, ZPOOL_CONFIG_CHILDREN, &vdev, 1);
+	ADD_PROP(root, root_err, nvlist_array, ZPOOL_CONFIG_CHILDREN, (nvlist_t const* const*) &vdev, 1);
 
 	// give the pool itself some properties
 

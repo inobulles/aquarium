@@ -5,6 +5,15 @@ import bob
 
 assert Platform.os() == "FreeBSD", "Aquariums are only supported on FreeBSD"
 
+let OPENZFS_INCLUDES = "/usr/src/sys/contrib/openzfs/include"
+assert Fs.exists(OPENZFS_INCLUDES), "OpenZFS includes not found (is /usr/src populated?)"
+
+let LIBSPL_INCLUDES = "/usr/src/sys/contrib/openzfs/lib/libspl/include"
+assert Fs.exists(OPENZFS_INCLUDES), "libspl includes not found (is /usr/src populated?)"
+
+let OS_LIBSPL_INCLUDES = "/usr/src/sys/contrib/openzfs/lib/libspl/include/os/freebsd"
+assert Fs.exists(OS_LIBSPL_INCLUDES), "OS-specific libspl includes not found (is /usr/src populated?)"
+
 deps = [
 	Dep.git("https://github.com/inobulles/libcopyfile", "v0.1.1"),
 	Dep.git("https://github.com/inobulles/libmkfs_msdos", "v0.1.0"),
@@ -17,7 +26,10 @@ let cmd_src = Fs.list("src/aquarium").where(|path| path.endswith(".c"))
 
 let cc = Cc([
 	"-g", "-std=c11", "-fPIC",
-	"-Isrc/lib/include", "-Isrc", "-isystem=/usr/local/include",
+	"-I" + OPENZFS_INCLUDES,
+	"-I" + LIBSPL_INCLUDES,
+	"-I" + OS_LIBSPL_INCLUDES,
+	"-Isrc", "-isystem=/usr/local/include",
 	"-Wall", "-Wextra", "-Werror"
 ])
 

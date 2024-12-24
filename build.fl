@@ -37,10 +37,14 @@ let lib_obj = cc.compile(lib_src)
 let cmd_obj = cc.compile(cmd_src)
 
 # Create static & dynamic libraries and frontend executable.
+# It's best we statically link in libaquarium to the frontend as it is a setuid binary.
+# This also means it will be runnable in the temporary prefix by Bob, as LD_LIBRARY_PATH doesn't work with setuid binaries (see rtld(1)).
+
+let libs = ["-larchive", "-lcrypto", "-lfetch", "-lgeom", "-ljail", "-lzfs", "-lcopyfile", "-lmkfs_msdos", "-lnvpair"]
 
 let archive = Linker([]).archive(lib_obj)
-let dyn_lib = Linker(["-shared", "-larchive", "-lcrypto", "-lfetch", "-lgeom", "-ljail", "-lzfs", "-lcopyfile", "-lmkfs_msdos"]).link(lib_obj)
-let cmd = Linker(["-laquarium", "-larchive", "-lcopyfile"]).link(cmd_obj)
+let dyn_lib = Linker(["-shared"] + libs).link(lib_obj)
+let cmd = Linker([archive] + libs).link(cmd_obj)
 
 # Installation map.
 

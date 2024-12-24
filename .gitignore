@@ -9,3 +9,6 @@ rootfs/
 my-aquarium
 .build
 *.sw[nop]
+.bob
+.cache
+compile_commands.json

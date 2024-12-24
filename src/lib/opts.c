@@ -10,18 +10,18 @@
 #include <unistd.h>
 
 #define STONERS_GROUP "stoners"
-#define BASE_PATH "/etc/aquariums"
+#define BASE_PATH "/usr/local/aquarium"
 
 // directory paths
 
-#define TEMPLATES_PATH "templates"
-#define KERNELS_PATH   "kernels"
-#define AQUARIUMS_PATH "aquariums"
+#define TEMPLATES_PATH "tmpls"
+#define KERNELS_PATH   "kerns"
+#define AQUARIUMS_PATH "roots"
 
 // file paths
 
-#define SANCTIONED_PATH "templates_remote"
-#define DB_PATH "aquarium_db"
+#define SANCTIONED_PATH "tmpls.remote"
+#define DB_PATH "db"
 
 // image output & filesystem creation options
 

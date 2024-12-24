@@ -102,7 +102,7 @@ int aquarium_sweep(aquarium_opts_t* opts, bool go_hard) {
 		survivor->aquarium_path = strdup(ent.aquarium_path);
 	}
 
-	// keep things nice and clean is to go through everything under /etc/aquariums/aquariums and see which aquariums were never "recensés" (censused?)
+	// keep things nice and clean is to go through everything under /usr/local/aquarium/roots and see which aquariums were never "recensés" (censused?)
 
 	DIR* const dp = opendir(opts->aquariums_path);
 

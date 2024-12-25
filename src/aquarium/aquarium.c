@@ -4,6 +4,7 @@
 #include <aquarium.h>
 #include "util.h"
 
+#include <assert.h>
 #include <dirent.h>
 #include <err.h>
 #include <errno.h>
@@ -28,6 +29,7 @@ static void usage(void) {
 		"       %1$s [-r base] tmpls\n"
 		"       %1$s [-r base] sweep\n"
 		"       %1$s [-r base] export path template\n"
+		"       %1$s [-r base] mount path target mount_path\n"
 		"       %1$s [-r base] cp path source_file ... target_directory\n",
 	getprogname());
 
@@ -190,6 +192,62 @@ static int do_img_out(aquarium_opts_t* opts) {
 	return aquarium_img_out(opts, aquarium_path, out_path) < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
+static void validate_target(char* target) {
+	// make sure target directory doesn't refer to $HOME
+	// we have no [easy] way of getting the $HOME of the aquarium, and even if we did, what user should we assume?
+	// this doesn't stop shells from expanding '~', but it's better than nothing
+
+	if (*target == '~') {
+		errx(EXIT_FAILURE, "target directory '%s' refers to $HOME ('~'), which is unsupported", target);
+	}
+
+	// also make sure it doesn't contain any ".."'s, as that can be used to copy to outside of the aquarium
+	// XXX technically we could count these and path components to see if we really do break out of the aquarium, but that's a lot of work
+
+	if (strstr(target, "..")) {
+		errx(EXIT_FAILURE, "target directory '%s' contains '..', which is unsupported", target);
+	}
+}
+
+static char* mount_target = NULL;
+static char* mount_path = NULL;
+
+static int do_mount(aquarium_opts_t* opts) {
+	char* const src_aq = aquarium_db_read_pointer_file(opts, path);
+
+	if (!src_aq) {
+		return EXIT_FAILURE;
+	}
+
+	char* const target_aq = aquarium_db_read_pointer_file(opts, mount_target);
+
+	if (!target_aq) {
+		return EXIT_FAILURE;
+	}
+
+	validate_target(mount_path);
+
+	if (opts->initial_uid && setuid(0) < 0) {
+		errx(EXIT_FAILURE, "setuid(0): %s", strerror(errno));
+	}
+
+	char* full_target = NULL;
+	asprintf(&full_target, "%s/%s", target_aq, mount_path);
+	assert(full_target != NULL);
+
+	struct iovec iov_fd[] = {
+		__AQUARIUM_IOV("fstype", "nullfs"),
+		__AQUARIUM_IOV("from", src_aq),
+		__AQUARIUM_IOV("fspath", full_target),
+	};
+
+	if (nmount(iov_fd, sizeof(iov_fd) / sizeof(*iov_fd), 0) < 0 && errno != ENOENT) {
+		errx(EXIT_FAILURE, "nmount: failed to bind mount \"%s\" to \"%s\": %s", src_aq, full_target, strerror(errno));
+	}
+
+	return 0;
+}
+
 static char** copy_args = NULL;
 static size_t copy_args_len = 0;
 
@@ -201,23 +259,7 @@ static int do_copy(aquarium_opts_t* opts) {
 	}
 
 	char* const target = copy_args[--copy_args_len];
-
-	// make sure target directory doesn't refer to $HOME
-	// we have no [easy] way of getting the $HOME of the aquarium, and even if we did, what user should we assume?
-	// this doesn't stop shells from expanding '~', but it's better than nothing
-
-	if (*target == '~') {
-		warnx("target directory '%s' refers to $HOME ('~'), which is unsupported", target);
-		return EXIT_FAILURE;
-	}
-
-	// also make sure it doesn't contain any ".."'s, as that can be used to copy to outside of the aquarium
-	// XXX technically we could count these and path components to see if we really do break out of the aquarium, but that's a lot of work
-
-	if (strstr(target, "..")) {
-		warnx("target directory '%s' contains '..', which is unsupported", target);
-		return EXIT_FAILURE;
-	}
+	validate_target(target);
 
 	// make sure all files are (recursively) readable by the user
 
@@ -407,6 +449,16 @@ int main(int argc, char* argv[]) {
 			action = do_out;
 			path = *argv++;
 			argc--;
+		}
+
+		else if (strcmp(instr, "mount") == 0) {
+			action = do_mount;
+			path = *argv++;
+
+			mount_target = *argv++;
+			mount_path = *argv++;
+
+			argc -= 3;
 		}
 
 		else if (strcmp(instr, "cp") == 0) {

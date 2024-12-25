@@ -1,5 +1,5 @@
 // This Source Form is subject to the terms of the AQUA Software License, v. 1.0.
-// Copyright (c) 2023 Aymeric Wibo
+// Copyright (c) 2024 Aymeric Wibo
 
 #include <aquarium.h>
 #include <dirent.h>
@@ -11,17 +11,13 @@
 #include <unistd.h>
 
 static int remove_aquarium(char* path) {
-	// first, make sure all possible mounted filesystems are unmounted
-	// if this fails, try to remove things anyway
+	// First, make sure all possible mounted filesystems are unmounted.
+	// If this fails, try to remove things anyway.
 
 	aquarium_os_t const os = aquarium_os_info(path);
 	int rv = aquarium_enter_setdown(path, os);
 
-	// then, we remove all the aquarium files
-	// the aquarium may have already been deleted (e.g. by a nosy user)
-	// so we don't wanna do anything with the return value of '__aquarium_wait_for_process'
-	// TODO I desperately need some easy API for removing files in the standard library on aquaBSD
-	//      I'm not (I hope) dumb enough to do something like 'asprintf(&cmd, "rm -rf %s", ent.aquarium_path)', but I know damn well other developers would be tempted to do such a thing given no other alternative
+	// Then, we must remove the immutable flag from the aquarium directory.
 
 	pid_t pid = fork();
 
@@ -30,7 +26,27 @@ static int remove_aquarium(char* path) {
 		return -1;
 	}
 
-	if (!pid) {
+	if (pid == 0) {
+		execl("/bin/chflags", "/bin/chflags", "-R", "noschg", path, NULL);
+		_exit(EXIT_FAILURE);
+	}
+
+	__aquarium_wait_for_process(pid);
+
+	// Finally, we remove all the aquarium files.
+	// The aquarium may have already been deleted (e.g. by a nosy user).
+	// So we don't wanna do anything with the return value of '__aquarium_wait_for_process'
+	// TODO I desperately need some easy API for removing files in the standard library on aquaBSD
+	//      I'm not (I hope) dumb enough to do something like 'asprintf(&cmd, "rm -rf %s", ent.aquarium_path)', but I know damn well other developers would be tempted to do such a thing given no other alternative.
+
+	pid = fork();
+
+	if (pid < 0) {
+		warnx("fork: %s", strerror(errno));
+		return -1;
+	}
+
+	if (pid == 0) {
 		execl("/bin/rm", "/bin/rm", "-rf", path, NULL);
 		_exit(EXIT_FAILURE);
 	}

@@ -185,7 +185,7 @@ err_cwd:
 
 static int copy_recursive(char* source, char* target) {
 	char* const path_argv[] = { source, NULL };
-	FTS* const fts = fts_open(path_argv, FTS_PHYSICAL | FTS_XDEV, NULL);
+	FTS* const fts = fts_open(path_argv, FTS_PHYSICAL | FTS_XDEV | FTS_NOCHDIR, NULL);
 
 	if (fts == NULL) {
 		warnx("fts_open(\"%s\"): %s", source, strerror(errno));
@@ -227,7 +227,7 @@ static int copy_recursive(char* source, char* target) {
 			break;
 
 		case FTS_D:
-		case FTS_DC: {}
+		case FTS_DC:;
 
 			if (mkdir_recursive(abs_path) < 0) {
 				goto err_mkdir;
@@ -241,7 +241,7 @@ static int copy_recursive(char* source, char* target) {
 		case FTS_DEFAULT:
 		default:
 
-			if (copyfile(path, abs_path, 0, COPYFILE_ALL) < 0) {
+			if (copyfile(path, abs_path, NULL, COPYFILE_ALL) < 0) {
 				warnx("copyfile(\"%s\", \"%s\"): %s", path, abs_path, strerror(errno));
 				goto err_copy;
 			}

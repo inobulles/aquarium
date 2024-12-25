@@ -22,14 +22,13 @@ static char* path = NULL;
 static void usage(void) {
 	fprintf(stderr,
 		"usage: %1$s [-r base]\n"
-		"       %1$s [-r base] -c path [-t template] [-k kernel_template]\n"
-		"       %1$s [-r base] [-d rulesets] [-j jailparams] [-m max_children] [-Dp] [-v interface] [-h hostname] -e path\n"
-		"       %1$s [-r base] -i path -o image\n"
-		"       %1$s [-r base] -I drive [-t template] [-k kernel_template]\n"
-		"       %1$s [-r base] -l\n"
-		"       %1$s [-r base] -s\n"
-		"       %1$s [-r base] -T path -o template\n"
-		"       %1$s [-r base] -y path source_file ... target_directory\n",
+		"       %1$s [-r base] [-t template] [-k kernel_template] create path\n"
+		"       %1$s [-r base] [-d rulesets] [-j jailparams] [-m max_children] [-Dp] [-v interface] [-h hostname] enter path\n"
+		"       %1$s [-r base] image path image\n"
+		"       %1$s [-r base] tmpls\n"
+		"       %1$s [-r base] sweep\n"
+		"       %1$s [-r base] export path template\n"
+		"       %1$s [-r base] cp path source_file ... target_directory\n",
 	getprogname());
 
 	exit(EXIT_FAILURE);
@@ -316,7 +315,7 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "c:d:De:fh:i:I:j:k:lm:o:pr:st:T:v:y:")) != -1) {
+	while ((c = getopt(argc, argv, "d:Dfh:j:k:m:o:pr:t:v:")) != -1) {
 		// general options
 
 		if (c == 'd') {
@@ -352,41 +351,6 @@ int main(int argc, char* argv[]) {
 			opts->vnet_bridge = optarg;
 		}
 
-		// action options
-
-		else if (c == 'c') {
-			action = do_create;
-			path = optarg;
-		}
-
-		else if (c == 'e') {
-			action = do_enter;
-			path = optarg;
-		}
-
-		else if (c == 'i') {
-			action = do_img_out;
-			path = optarg;
-		}
-
-		else if (c == 'l') {
-			action = do_list_templates;
-		}
-
-		else if (c == 's') {
-			action = do_sweep;
-		}
-
-		else if (c == 'T') {
-			action = do_out;
-			path = optarg;
-		}
-
-		else if (c == 'y') {
-			action = do_copy;
-			path = optarg;
-		}
-
 		// name-passing options
 
 		else if (c == 'k') {
@@ -409,12 +373,52 @@ int main(int argc, char* argv[]) {
 	argc -= optind;
 	argv += optind;
 
-	if (action == do_copy) {
-		copy_args = argv;
-		copy_args_len = argc;
+	if (argc > 0) {
+		char* const instr = *argv++;
+
+		if (strcmp(instr, "create") == 0) {
+			action = do_create;
+			path = *argv++;
+		}
+
+		else if (strcmp(instr, "enter") == 0) {
+			action = do_enter;
+			path = *argv++;
+		}
+
+		else if (strcmp(instr, "image") == 0) {
+			action = do_img_out;
+			path = *argv++;
+		}
+
+		else if (strcmp(instr, "tmpls") == 0) {
+			action = do_list_templates;
+		}
+
+		else if (strcmp(instr, "sweep") == 0) {
+			action = do_sweep;
+		}
+
+		else if (strcmp(instr, "export") == 0) {
+			action = do_out;
+			path = *argv++;
+		}
+
+		else if (strcmp(instr, "cp") == 0) {
+			action = do_copy;
+
+			copy_args = argv;
+			copy_args_len = argc;
+
+			argc -= copy_args_len;
+		}
+
+		else {
+			usage();
+		}
 	}
 
-	else if (argc) {
+	if (argc != 0) {
 		usage();
 	}
 

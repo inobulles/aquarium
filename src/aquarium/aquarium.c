@@ -434,7 +434,8 @@ int main(int argc, char* argv[]) {
 		else if (strcmp(instr, "image") == 0) {
 			action = do_img_out;
 			path = *argv++;
-			argc--;
+			out_path = *argv++;
+			argc -= 2;
 		}
 
 		else if (strcmp(instr, "tmpls") == 0) {
@@ -448,7 +449,8 @@ int main(int argc, char* argv[]) {
 		else if (strcmp(instr, "export") == 0) {
 			action = do_out;
 			path = *argv++;
-			argc--;
+			out_path = *argv++;
+			argc -= 2;
 		}
 
 		else if (strcmp(instr, "mount") == 0) {

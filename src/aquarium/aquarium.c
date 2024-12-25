@@ -1,5 +1,5 @@
 // This Source Form is subject to the terms of the AQUA Software License, v. 1.0.
-// Copyright (c) 2023 Aymeric Wibo
+// Copyright (c) 2024 Aymeric Wibo
 
 #include <aquarium.h>
 #include "util.h"
@@ -374,21 +374,25 @@ int main(int argc, char* argv[]) {
 	argv += optind;
 
 	if (argc > 0) {
+		argc--;
 		char* const instr = *argv++;
 
 		if (strcmp(instr, "create") == 0) {
 			action = do_create;
 			path = *argv++;
+			argc--;
 		}
 
 		else if (strcmp(instr, "enter") == 0) {
 			action = do_enter;
 			path = *argv++;
+			argc--;
 		}
 
 		else if (strcmp(instr, "image") == 0) {
 			action = do_img_out;
 			path = *argv++;
+			argc--;
 		}
 
 		else if (strcmp(instr, "tmpls") == 0) {
@@ -402,6 +406,7 @@ int main(int argc, char* argv[]) {
 		else if (strcmp(instr, "export") == 0) {
 			action = do_out;
 			path = *argv++;
+			argc--;
 		}
 
 		else if (strcmp(instr, "cp") == 0) {
@@ -410,7 +415,7 @@ int main(int argc, char* argv[]) {
 			copy_args = argv;
 			copy_args_len = argc;
 
-			argc -= copy_args_len;
+			argc = 0;
 		}
 
 		else {

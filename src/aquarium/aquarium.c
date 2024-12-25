@@ -412,6 +412,9 @@ int main(int argc, char* argv[]) {
 		else if (strcmp(instr, "cp") == 0) {
 			action = do_copy;
 
+			path = *argv++;
+			argc--;
+
 			copy_args = argv;
 			copy_args_len = argc;
 

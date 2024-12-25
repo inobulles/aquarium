@@ -124,61 +124,6 @@ static int do_create(aquarium_opts_t* opts) {
 	return EXIT_SUCCESS;
 }
 
-static int do_install(aquarium_opts_t* opts) {
-	if (!path) {
-		usage();
-	}
-
-	char* const target = path;
-
-	// find our drive
-
-	aquarium_drive_t* drives = NULL;
-	size_t drives_len = 0;
-
-	if (aquarium_drives_read(&drives, &drives_len) < 0) {
-		return EXIT_FAILURE;
-	}
-
-	aquarium_drive_t* const drive = aquarium_drives_find(drives, drives_len, target);
-
-	if (!drive) {
-		return EXIT_FAILURE;
-	}
-
-	// create partition table on target
-
-	if (aquarium_format_new_table(opts, drive) < 0) {
-		return EXIT_FAILURE;
-	}
-
-	// create ZFS filesystem on target
-
-	char const* const root = "/mnt";
-
-	if (aquarium_format_create_zfs(opts, drive, root) < 0) {
-		return EXIT_FAILURE;
-	}
-
-	// extract templates
-
-	if (template && aquarium_extract_template(opts, root, template, AQUARIUM_TEMPLATE_KIND_BASE) < 0) {
-		return EXIT_FAILURE;
-	}
-
-	if (kernel_template && aquarium_extract_template(opts, root, kernel_template, AQUARIUM_TEMPLATE_KIND_KERNEL) < 0) {
-		return EXIT_FAILURE;
-	}
-
-	// create ESP on target
-
-	if (aquarium_format_create_esp(opts, drive, root) < 0) {
-		return EXIT_FAILURE;
-	}
-
-	return EXIT_SUCCESS;
-}
-
 static int enter_cb(__attribute__((unused)) void* param) {
 	// unfortunately we kinda need to use execlp here
 	// different OS' may have different locations for the 'env' binary
@@ -421,11 +366,6 @@ int main(int argc, char* argv[]) {
 
 		else if (c == 'i') {
 			action = do_img_out;
-			path = optarg;
-		}
-
-		else if (c == 'I') {
-			action = do_install;
 			path = optarg;
 		}
 

@@ -64,6 +64,7 @@ int aquarium_create_struct(aquarium_opts_t* opts) {
 	TRY_MKDIR(opts->base_path)
 	TRY_MKDIR(opts->templates_path)
 	TRY_MKDIR(opts->kernels_path)
+	TRY_MKDIR(opts->overlays_path)
 	TRY_MKDIR(opts->aquariums_path)
 
 	// try creating sanctioned templates file
@@ -238,7 +239,11 @@ setup_script_err:
 	return rv;
 }
 
-int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const* template, char const* kernel_template) {
+int aquarium_create(
+	aquarium_opts_t* opts, char const* pointer_path,
+	char const* template, char const* kernel_template,
+	char const* const* overlays, size_t overlay_count
+) {
 	int rv = -1;
 
 	// make sure our template is legal
@@ -321,6 +326,8 @@ int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const*
 	}
 
 	// extract templates
+	// TODO It would be nice if we could get all the downloads done first, and only then extract the templates.
+	// That way, if there's a downloading issue, we fail fast.
 
 	if (template && aquarium_extract_template(opts, path, template, AQUARIUM_TEMPLATE_KIND_BASE) < 0) {
 		goto extract_template_err;
@@ -328,6 +335,13 @@ int aquarium_create(aquarium_opts_t* opts, char const* pointer_path, char const*
 
 	if (kernel_template && aquarium_extract_template(opts, path, kernel_template, AQUARIUM_TEMPLATE_KIND_KERNEL) < 0) {
 		goto extract_template_err;
+	}
+
+	for (size_t i = 0; i < overlay_count; i++) {
+		if (aquarium_extract_template(opts, path, overlays[i], AQUARIUM_TEMPLATE_KIND_OVERLAY) < 0) {
+			goto extract_template_err;
+		}
+	
 	}
 
 	// write info to aquarium database

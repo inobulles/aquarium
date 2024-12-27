@@ -14,8 +14,9 @@
 #include <string.h>
 #include <unistd.h>
 
-static char* template = "amd64.aquabsd.0.1.1-beta";
+static char* template = "amd64.freebsd.14-2-release";
 static char* kernel_template = NULL;
+static char* overlay_templates = NULL;
 
 static char* out_path = NULL;
 static char* path = NULL;
@@ -23,7 +24,7 @@ static char* path = NULL;
 static void usage(void) {
 	fprintf(stderr,
 		"usage: %1$s [-r base]\n"
-		"       %1$s [-r base] [-t template] [-k kernel_template] create path\n"
+		"       %1$s [-r base] [-t template] [-k kernel_template] [-O overlay_templates] create path\n"
 		"       %1$s [-r base] [-d rulesets] [-j jailparams] [-m max_children] [-Dp] [-v interface] [-h hostname] enter path\n"
 		"       %1$s [-r base] image path image\n"
 		"       %1$s [-r base] tmpls\n"
@@ -109,6 +110,7 @@ static inline void __list_templates_dir(const char* path, const char* kind) {
 static int do_list_templates(aquarium_opts_t* opts) {
 	__list_templates_dir(opts->templates_path, "BASE");
 	__list_templates_dir(opts->kernels_path, "KERNEL");
+	__list_templates_dir(opts->overlays_path, "OVERLAY");
 
 	return EXIT_SUCCESS;
 }
@@ -118,7 +120,20 @@ static int do_create(aquarium_opts_t* opts) {
 		usage();
 	}
 
-	if (aquarium_create(opts, path, template, kernel_template) < 0) {
+	char** overlays = NULL;
+	size_t overlay_count = 0;
+
+	if (overlay_templates != NULL) {
+		char* tok;
+
+		while ((tok = strsep(&overlay_templates, ","))) {
+			overlays = realloc(overlays, ++overlay_count * sizeof *overlays);
+			assert(overlays != NULL);
+			overlays[overlay_count - 1] = tok;
+		}
+	}
+
+	if (aquarium_create(opts, path, template, kernel_template, (void*) overlays, overlay_count) < 0) {
 		return EXIT_FAILURE;
 	}
 
@@ -357,7 +372,7 @@ int main(int argc, char* argv[]) {
 
 	int c;
 
-	while ((c = getopt(argc, argv, "d:Dfh:j:k:m:o:pr:t:v:")) != -1) {
+	while ((c = getopt(argc, argv, "d:Dfh:j:k:m:o:O:pr:t:v:")) != -1) {
 		// general options
 
 		if (c == 'd') {
@@ -405,6 +420,10 @@ int main(int argc, char* argv[]) {
 
 		else if (c == 'o') {
 			out_path = optarg;
+		}
+
+		else if (c == 'O') {
+			overlay_templates = optarg;
 		}
 
 		else {

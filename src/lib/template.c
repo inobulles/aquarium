@@ -4,7 +4,9 @@
 #include <aquarium.h>
 #include "archive.h"
 #include "archive_entry.h"
+#include <assert.h>
 #include <err.h>
+#include <errno.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <openssl/sha.h>
@@ -193,6 +195,10 @@ int aquarium_download_template(aquarium_opts_t* opts, char const* path, char con
 					sanctioned.kind = AQUARIUM_TEMPLATE_KIND_KERNEL;
 				}
 
+				else if (*tok == 'o') {
+					sanctioned.kind = AQUARIUM_TEMPLATE_KIND_OVERLAY;
+				}
+
 				else {
 					warnx("Unknown template kind ('%s')", tok);
 					goto template_kind_err;
@@ -325,7 +331,21 @@ int aquarium_extract_template(aquarium_opts_t* opts, char const* path, char cons
 
 	// where should we look for templates?
 
-	char* const search_path = kind == AQUARIUM_TEMPLATE_KIND_KERNEL ? opts->kernels_path : opts->templates_path;
+	char* search_path = NULL;
+
+	switch (kind) {
+	case AQUARIUM_TEMPLATE_KIND_BASE:
+		search_path = opts->templates_path;
+		break;
+	case AQUARIUM_TEMPLATE_KIND_KERNEL:
+		search_path = opts->kernels_path;
+		break;
+	case AQUARIUM_TEMPLATE_KIND_OVERLAY:
+		search_path = opts->overlays_path;
+		break;
+	}
+
+	assert(search_path != NULL);
 
 	// build template path
 	// attempt to download & check it if it don't already exist

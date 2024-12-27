@@ -29,6 +29,7 @@ typedef enum {
 typedef enum {
 	AQUARIUM_TEMPLATE_KIND_BASE,
 	AQUARIUM_TEMPLATE_KIND_KERNEL,
+	AQUARIUM_TEMPLATE_KIND_OVERLAY,
 } aquarium_template_kind_t;
 
 typedef enum {
@@ -76,6 +77,7 @@ typedef struct {
 	char* base_path;
 	char* templates_path;
 	char* kernels_path;
+	char* overlays_path;
 	char* aquariums_path;
 
 	// file paths
@@ -156,7 +158,11 @@ int aquarium_os_load_epair_kmod(void);
 int aquarium_os_load_bridge_kmod(void);
 
 int aquarium_create_struct(aquarium_opts_t* opts);
-int aquarium_create(aquarium_opts_t* opts, char const* path, char const* template, char const* kernel_template);
+int aquarium_create(
+	aquarium_opts_t* opts, char const* pointer_path,
+	char const* template, char const* kernel_template,
+	char const* const* overlays, size_t overlay_count
+);
 
 int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t cb, void* param);
 int aquarium_enter_setdown(char const* path, aquarium_os_t os);

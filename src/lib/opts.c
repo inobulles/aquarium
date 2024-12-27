@@ -16,6 +16,7 @@
 
 #define TEMPLATES_PATH "tmpls"
 #define KERNELS_PATH   "kerns"
+#define OVERLAYS_PATH  "overlays"
 #define AQUARIUMS_PATH "roots"
 
 // file paths
@@ -105,6 +106,7 @@ void aquarium_opts_free(aquarium_opts_t* opts) {
 
 	TRY_FREE(opts->templates_path);
 	TRY_FREE(opts->kernels_path);
+	TRY_FREE(opts->overlays_path);
 	TRY_FREE(opts->aquariums_path);
 
 	// file paths
@@ -139,10 +141,12 @@ void aquarium_opts_set_base_path(aquarium_opts_t* opts, char const* base_path) {
 
 	TRY_FREE(opts->templates_path);
 	TRY_FREE(opts->kernels_path);
+	TRY_FREE(opts->overlays_path);
 	TRY_FREE(opts->aquariums_path);
 
 	if (asprintf(&opts->templates_path, "%s/" TEMPLATES_PATH, opts->base_path)) {}
 	if (asprintf(&opts->kernels_path,   "%s/" KERNELS_PATH,   opts->base_path)) {}
+	if (asprintf(&opts->overlays_path,  "%s/" OVERLAYS_PATH,  opts->base_path)) {}
 	if (asprintf(&opts->aquariums_path, "%s/" AQUARIUMS_PATH, opts->base_path)) {}
 
 	// file paths

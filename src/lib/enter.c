@@ -220,7 +220,7 @@ static int devfs_apply_opts(aquarium_opts_t* opts) {
 
 	// we necessarily need to start by hiding everything
 
-	APPLY_RULESET(1); // devfsrules_hide_all
+	// APPLY_RULESET(1); // devfsrules_hide_all
 
 	for (size_t i = 0; i < opts->ruleset_count; i++) {
 		aquarium_devfs_ruleset_t const ruleset = opts->rulesets[i];

@@ -13,7 +13,7 @@ static char const* const SANCTIONED =
 
 	"b:amd64.freebsd.14-2-release:https:download.freebsd.org/ftp/releases/amd64/14.2-RELEASE/base.txz:205880752:e3971a3d4f36ed1ac67d2e7a5501726de79dd3695aa76bfad2a4ebe91a88a134\n"
 	"k:amd64.freebsd.14-2-release:https:download.freebsd.org/ftp/releases/amd64/14.2-RELEASE/kernel.txz:57859924:b441661d86cbea3be3191db462d0477e099e7dbdc4d2ca186ebb14df1a848480\n"
-	"o:amd64.freebsd.14-2-release.src:https:download.freebsd.org/ftp/releases/amd64/14.2-RELEASE/src.txz:214942672:idk\n"
+	"o:amd64.freebsd.14-2-release.src:https:download.freebsd.org/ftp/releases/amd64/14.2-RELEASE/src.txz:214942672:2e8a48c5209302e5372ccbaf3e0adf8f21c9cadfdc8277420bf43ac236387a93\n"
 ;
 
 // vim: nospell

@@ -379,9 +379,9 @@ int aquarium_img_out(aquarium_opts_t* opts, char const* path, char const* out) {
 		return -1;
 	}
 
-	// add necessary entries to fstab
+	// add necessary entries to fstab, only if we should be
 
-	if (update_fstab(opts, path) < 0) {
+	if (getenv("AQUARIUM_NO_UPDATE_FSTAB") == NULL && update_fstab(opts, path) < 0) {
 		return -1;
 	}
 

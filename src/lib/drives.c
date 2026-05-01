@@ -12,11 +12,21 @@
 static aquarium_drive_kind_t drive_kind(char const* provider) {
 	// not super super robust but whatever
 
-	if (!strncmp(provider, "md", 2)) return AQUARIUM_DRIVE_KIND_MD;
-	if (!strncmp(provider, "ad", 2)) return AQUARIUM_DRIVE_KIND_ADA;
-	if (!strncmp(provider, "da", 2)) return AQUARIUM_DRIVE_KIND_DA;
-	if (!strncmp(provider, "nv", 2)) return AQUARIUM_DRIVE_KIND_NVME;
-	if (!strncmp(provider, "cd", 2)) return AQUARIUM_DRIVE_KIND_CD;
+	if (!strncmp(provider, "md", 2)) {
+		return AQUARIUM_DRIVE_KIND_MD;
+	}
+	if (!strncmp(provider, "ad", 2)) {
+		return AQUARIUM_DRIVE_KIND_ADA;
+	}
+	if (!strncmp(provider, "da", 2)) {
+		return AQUARIUM_DRIVE_KIND_DA;
+	}
+	if (!strncmp(provider, "nv", 2)) {
+		return AQUARIUM_DRIVE_KIND_NVME;
+	}
+	if (!strncmp(provider, "cd", 2)) {
+		return AQUARIUM_DRIVE_KIND_CD;
+	}
 
 	return AQUARIUM_DRIVE_KIND_OTHER;
 }
@@ -58,7 +68,7 @@ static int process_drive(aquarium_drive_t** drives_ref, size_t* drives_len_ref, 
 			else if (!strcmp(config->lg_name, "descr") && config->lg_val) {
 				drive->name = strdup(config->lg_val);
 			}
-			
+
 			else if (!strcmp(config->lg_name, "label") && config->lg_val) {
 				drive->label = strdup(config->lg_val);
 			}
@@ -141,7 +151,7 @@ static int process_class(aquarium_drive_t** drives_ref, size_t* drives_len_ref, 
 	LIST_FOREACH(geom, &class->lg_geom, lg_geom) {
 		process_drive(drives_ref, drives_len_ref, geom, class);
 	}
-	
+
 	return 0;
 }
 
@@ -158,8 +168,8 @@ int aquarium_drives_read(aquarium_drive_t** drives_ref, size_t* drives_len_ref) 
 	}
 
 	if (
-		process_class(drives_ref, drives_len_ref, &mesh, "DISK" ) < 0 ||
-		process_class(drives_ref, drives_len_ref, &mesh, "MD"   ) < 0 ||
+		process_class(drives_ref, drives_len_ref, &mesh, "DISK") < 0 ||
+		process_class(drives_ref, drives_len_ref, &mesh, "MD") < 0 ||
 		process_class(drives_ref, drives_len_ref, &mesh, "LABEL") < 0
 	) {
 		goto class_err;

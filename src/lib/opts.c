@@ -15,8 +15,8 @@
 // directory paths
 
 #define TEMPLATES_PATH "tmpls"
-#define KERNELS_PATH   "kerns"
-#define OVERLAYS_PATH  "overlays"
+#define KERNELS_PATH "kerns"
+#define OVERLAYS_PATH "overlays"
 #define AQUARIUMS_PATH "roots"
 
 // file paths
@@ -26,11 +26,10 @@
 
 // image output & filesystem creation options
 
-#define ROOTFS_LABEL  "freebsd-ufs"
-#define ESP_LABEL     "efiboot0"
-#define ESP_OEM       "BSD4.4  "
+#define ROOTFS_LABEL "freebsd-ufs"
+#define ESP_LABEL "efiboot0"
+#define ESP_OEM "BSD4.4  "
 #define ESP_VOL_LABEL "FREEBSD-ESP"
-
 
 aquarium_opts_t* aquarium_opts_create(void) {
 	aquarium_opts_t* const opts = calloc(1, sizeof *opts);
@@ -41,9 +40,9 @@ aquarium_opts_t* aquarium_opts_create(void) {
 
 	// image output & filesystem creation options
 
-	opts->rootfs_label  = strdup(ROOTFS_LABEL );
-	opts->esp_label     = strdup(ESP_LABEL    );
-	opts->esp_oem       = strdup(ESP_OEM      );
+	opts->rootfs_label = strdup(ROOTFS_LABEL);
+	opts->esp_label = strdup(ESP_LABEL);
+	opts->esp_oem = strdup(ESP_OEM);
 	opts->esp_vol_label = strdup(ESP_VOL_LABEL);
 
 	// jail options
@@ -138,8 +137,8 @@ void aquarium_opts_set_base_path(aquarium_opts_t* opts, char const* base_path) {
 	free(opts->aquariums_path);
 
 	if (asprintf(&opts->templates_path, "%s/" TEMPLATES_PATH, opts->base_path)) {}
-	if (asprintf(&opts->kernels_path,   "%s/" KERNELS_PATH,   opts->base_path)) {}
-	if (asprintf(&opts->overlays_path,  "%s/" OVERLAYS_PATH,  opts->base_path)) {}
+	if (asprintf(&opts->kernels_path, "%s/" KERNELS_PATH, opts->base_path)) {}
+	if (asprintf(&opts->overlays_path, "%s/" OVERLAYS_PATH, opts->base_path)) {}
 	if (asprintf(&opts->aquariums_path, "%s/" AQUARIUMS_PATH, opts->base_path)) {}
 
 	// file paths
@@ -148,7 +147,7 @@ void aquarium_opts_set_base_path(aquarium_opts_t* opts, char const* base_path) {
 	free(opts->db_path);
 
 	if (asprintf(&opts->sanctioned_path, "%s/" SANCTIONED_PATH, opts->base_path)) {}
-	if (asprintf(&opts->db_path,         "%s/" DB_PATH,         opts->base_path)) {}
+	if (asprintf(&opts->db_path, "%s/" DB_PATH, opts->base_path)) {}
 }
 
 void aquarium_opts_add_devfs_ruleset(aquarium_opts_t* opts, uint32_t ruleset) {

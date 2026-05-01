@@ -1,8 +1,9 @@
 // This Source Form is subject to the terms of the AQUA Software License, v. 1.0.
 // Copyright (c) 2023 Aymeric Wibo
 
-#include <aquarium.h>
 #include "sanctioned.h"
+#include <aquarium.h>
+#include <copyfile.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -12,7 +13,6 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <copyfile.h>
 
 int aquarium_create_struct(aquarium_opts_t* opts) {
 	int rv = -1;
@@ -25,41 +25,40 @@ int aquarium_create_struct(aquarium_opts_t* opts) {
 		return -1;
 	}
 
-	// try making the directory structure 
+	// try making the directory structure
 
-	#define SET_PERMS(path, mode) { \
-		struct stat sb; \
-		\
-		if (stat((path), &sb) < 0) { \
-			warnx("stat(\"%s\"): %s", (path), strerror(errno)); \
-			goto err; \
-		} \
-		\
-		bool const owner_correct = sb.st_uid == 0 && sb.st_gid == opts->stoners_gid; \
-		bool const mode_correct = (sb.st_mode & 0777) == (mode); \
-		\
-		if (!owner_correct && chown((path), 0, opts->stoners_gid) < 0) { \
+#define SET_PERMS(path, mode)                                                           \
+	{                                                                                    \
+		struct stat sb;                                                                   \
+                                                                                        \
+		if (stat((path), &sb) < 0) {                                                      \
+			warnx("stat(\"%s\"): %s", (path), strerror(errno));                            \
+			goto err;                                                                      \
+		}                                                                                 \
+                                                                                        \
+		bool const owner_correct = sb.st_uid == 0 && sb.st_gid == opts->stoners_gid;      \
+		bool const mode_correct = (sb.st_mode & 0777) == (mode);                          \
+                                                                                        \
+		if (!owner_correct && chown((path), 0, opts->stoners_gid) < 0) {                  \
 			warnx("chown(\"%s\", 0, %d): %s", (path), opts->stoners_gid, strerror(errno)); \
-			goto err; \
-		} \
-		\
-		\
-		if (!mode_correct && chmod((path), (mode)) < 0) { \
-			warnx("chmod(\"%s\", 0, 0%o): %s", (path), (mode), strerror(errno)); \
-			goto err; \
-		} \
+			goto err;                                                                      \
+		}                                                                                 \
+                                                                                        \
+		if (!mode_correct && chmod((path), (mode)) < 0) {                                 \
+			warnx("chmod(\"%s\", 0, 0%o): %s", (path), (mode), strerror(errno));           \
+			goto err;                                                                      \
+		}                                                                                 \
 	}
-
 
 	// 0770: execute access is required to list directory
 
-	#define TRY_MKDIR(path) \
-		if (mkdir((path), 0770) < 0 && errno != EEXIST) { \
-			warnx("mkdir(\"%s\", 0%o): %s", (path), 0770, strerror(errno)); \
-			goto err; \
-		} \
-		\
-		SET_PERMS((path), 0770)
+#define TRY_MKDIR(path)                                               \
+	if (mkdir((path), 0770) < 0 && errno != EEXIST) {                  \
+		warnx("mkdir(\"%s\", 0%o): %s", (path), 0770, strerror(errno)); \
+		goto err;                                                       \
+	}                                                                  \
+                                                                      \
+	SET_PERMS((path), 0770)
 
 	TRY_MKDIR(opts->base_path)
 	TRY_MKDIR(opts->templates_path)
@@ -115,14 +114,12 @@ static char* setup_script_unix(char* hostname) {
 	char* script;
 
 	if (asprintf(&script,
-		"#!/bin/sh\n"
-		"set -e;"
+	             "#!/bin/sh\n" "set -e;"
 
-		"hostname=%s;"
+	             "hostname=%s;"
 
-		"echo $hostname > /etc/hostname;"
-		"echo 127.0.0.1 $hostname >> /etc/hosts;",
-	hostname)) {}
+	             "echo $hostname > /etc/hostname;" "echo 127.0.0.1 $hostname >> /etc/hosts;",
+	             hostname)) {}
 
 	return script;
 }
@@ -135,16 +132,16 @@ static char* setup_script_ubuntu(char* hostname) {
 	char* const unix_script = setup_script_unix(hostname);
 	char* script;
 
-	if (asprintf(&script, "%s"
-		// fix APT defaults
+	if (asprintf(&script,
+	             "%s"
+	             // fix APT defaults
 
-		"echo APT::Cache-Start \\\"100000000\\\"\\; >> /etc/apt/apt.conf.d/10cachestart;"
-		"sed -i 's/$/\\ universe/' /etc/apt/sources.list;"
+	             "echo APT::Cache-Start \\\"100000000\\\"\\; >> /etc/apt/apt.conf.d/10cachestart;" "sed -i 's/$/\\ universe/' /etc/apt/sources.list;"
 
-		// broken symlink (symbolic, not hard!) which needs to be fixed for the dynamic linker to work
+	             // broken symlink (symbolic, not hard!) which needs to be fixed for the dynamic linker to work
 
-		"ln -sf ../lib/x86_64-linux-gnu/ld-2.31.so /lib64/ld-linux-x86-64.so.2;",
-	unix_script)) {}
+	             "ln -sf ../lib/x86_64-linux-gnu/ld-2.31.so /lib64/ld-linux-x86-64.so.2;",
+	             unix_script)) {}
 
 	free(unix_script);
 	return script;
@@ -240,9 +237,12 @@ setup_script_err:
 }
 
 int aquarium_create(
-	aquarium_opts_t* opts, char const* pointer_path,
-	char const* template, char const* kernel_template,
-	char const* const* overlays, size_t overlay_count
+	aquarium_opts_t* opts,
+	char const* pointer_path,
+	char const* template,
+	char const* kernel_template,
+	char const* const* overlays,
+	size_t overlay_count
 ) {
 	int rv = -1;
 
@@ -341,7 +341,6 @@ int aquarium_create(
 		if (aquarium_extract_template(opts, path, overlays[i], AQUARIUM_TEMPLATE_KIND_OVERLAY) < 0) {
 			goto extract_template_err;
 		}
-	
 	}
 
 	// write info to aquarium database

@@ -4,9 +4,7 @@
 #include <unistd.h>
 
 static void usage(void) {
-	fprintf(stderr,
-		"usage: %1$s -t target\n",
-	getprogname());
+	fprintf(stderr, "usage: %1$s -t target\n", getprogname());
 
 	exit(EXIT_FAILURE);
 }
@@ -67,7 +65,7 @@ static int do_install(aquarium_opts_t* opts) {
 
 // main function
 
-typedef int (*action_t) (aquarium_opts_t* opts);
+typedef int (*action_t)(aquarium_opts_t* opts);
 
 int main(int argc, char* argv[]) {
 	aquarium_opts_t* opts = aquarium_opts_create();

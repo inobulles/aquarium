@@ -2,6 +2,7 @@
 // Copyright (c) 2024 Aymeric Wibo
 
 #include <aquarium.h>
+
 #include "util.h"
 
 #include <assert.h>
@@ -22,10 +23,12 @@ static char* out_path = NULL;
 static char* path = NULL;
 
 static void usage(void) {
+	// clang-format off
 	fprintf(stderr,
 		"usage: %1$s [-r base]\n"
 		"       %1$s [-r base] [-t template] [-k kernel_template] [-O overlay_templates] create path\n"
 		"       %1$s [-r base] [-d rulesets] [-j jailparams] [-m max_children] [-Dp] [-v interface] [-h hostname] enter path\n"
+		"       %1$s [-r base] kill path\n"
 		"       %1$s [-r base] image path image\n"
 		"       %1$s [-r base] tmpls\n"
 		"       %1$s [-r base] sweep\n"
@@ -33,6 +36,7 @@ static void usage(void) {
 		"       %1$s [-r base] mount path target mount_path\n"
 		"       %1$s [-r base] cp path source_file ... target_directory\n",
 	getprogname());
+	// clang-format on
 
 	exit(EXIT_FAILURE);
 }
@@ -60,7 +64,7 @@ static int do_list(aquarium_opts_t* opts) {
 	return EXIT_SUCCESS;
 }
 
-static inline void __list_templates_dir(const char* path, const char* kind) {
+static inline void __list_templates_dir(char const* path, char const* kind) {
 	DIR* dp = opendir(path);
 
 	if (!dp) {
@@ -79,7 +83,10 @@ static inline void __list_templates_dir(const char* path, const char* kind) {
 		}
 
 		enum {
-			ARCH, OS, VERS, SENTINEL
+			ARCH,
+			OS,
+			VERS,
+			SENTINEL
 		} kind = 0;
 
 		char* tok;
@@ -306,7 +313,7 @@ static int do_copy(aquarium_opts_t* opts) {
 
 	// then, actually copy all the files recursively
 
-	while (copy_args_len --> 0) {
+	while (copy_args_len-- > 0) {
 		char* const source = copy_args[copy_args_len];
 
 		if (copy_recursive(source, abs_target)) {
@@ -357,7 +364,7 @@ static void parse_jailparams(aquarium_opts_t* opts, char* jailparams) {
 
 // main function
 
-typedef int (*action_t) (aquarium_opts_t* opts);
+typedef int (*action_t)(aquarium_opts_t* opts);
 
 int main(int argc, char* argv[]) {
 	action_t action = do_list;

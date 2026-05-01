@@ -6,8 +6,8 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/param.h>
 #include <sys/linker.h>
+#include <sys/param.h>
 
 aquarium_os_t aquarium_os_info(char const* _path) {
 	// this method of retrieving OS info relies on the existence of an '/etc/os-release' file on the installation

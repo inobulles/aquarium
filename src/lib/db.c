@@ -26,14 +26,14 @@ bool aquarium_db_next_ent(aquarium_opts_t* opts, aquarium_db_ent_t* ent, size_t 
 
 	// parse tokens
 
-	char* const pointer_path  = strsep(&line, ":");
+	char* const pointer_path = strsep(&line, ":");
 	char* const aquarium_path = strsep(&line, ":");
 
 	if (be_dramatic && (!pointer_path || !aquarium_path)) {
 		warnx("Aquarium database file %s has an invalid format", opts->db_path);
 	}
 
-	ent->pointer_path  = pointer_path;
+	ent->pointer_path = pointer_path;
 	ent->aquarium_path = aquarium_path;
 
 	return true;

@@ -14,7 +14,7 @@ With [Bob the Builder](https://github.com/inobulles/bob) installed:
 bob build
 ```
 
-To run the tests:
+To run the tests (which require aquariums to be installed, see the following section):
 
 ```console
 sh tests.sh

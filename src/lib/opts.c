@@ -26,10 +26,10 @@
 
 // image output & filesystem creation options
 
-#define ROOTFS_LABEL  "aquabsd-rootfs"
-#define ESP_LABEL     "aquabsd-esp"
-#define ESP_OEM       "AQUABSD "
-#define ESP_VOL_LABEL "AQUABSD-ESP"
+#define ROOTFS_LABEL  "freebsd-ufs"
+#define ESP_LABEL     "efiboot0"
+#define ESP_OEM       "BSD4.4  "
+#define ESP_VOL_LABEL "FREEBSD-ESP"
 
 
 aquarium_opts_t* aquarium_opts_create(void) {

@@ -31,13 +31,6 @@
 #define ESP_OEM       "AQUABSD "
 #define ESP_VOL_LABEL "AQUABSD-ESP"
 
-// useful macros
-
-#define TRY_FREE(str) do { \
-	if ((str)) { \
-		free((str)); \
-	} \
-} while (0)
 
 aquarium_opts_t* aquarium_opts_create(void) {
 	aquarium_opts_t* const opts = calloc(1, sizeof *opts);
@@ -100,49 +93,49 @@ ok:
 }
 
 void aquarium_opts_free(aquarium_opts_t* opts) {
-	TRY_FREE(opts->base_path);
+	free(opts->base_path);
 
 	// directory paths
 
-	TRY_FREE(opts->templates_path);
-	TRY_FREE(opts->kernels_path);
-	TRY_FREE(opts->overlays_path);
-	TRY_FREE(opts->aquariums_path);
+	free(opts->templates_path);
+	free(opts->kernels_path);
+	free(opts->overlays_path);
+	free(opts->aquariums_path);
 
 	// file paths
 
-	TRY_FREE(opts->sanctioned_path);
-	TRY_FREE(opts->db_path);
+	free(opts->sanctioned_path);
+	free(opts->db_path);
 
 	// image output & filesystem creation options
 
-	TRY_FREE(opts->rootfs_label);
-	TRY_FREE(opts->esp_label);
-	TRY_FREE(opts->esp_oem);
-	TRY_FREE(opts->esp_vol_label);
+	free(opts->rootfs_label);
+	free(opts->esp_label);
+	free(opts->esp_oem);
+	free(opts->esp_vol_label);
 
 	// jailparams
 
-	TRY_FREE(opts->jailparam_keys);
-	TRY_FREE(opts->jailparam_vals);
+	free(opts->jailparam_keys);
+	free(opts->jailparam_vals);
 
 	// devfs ruleset options
 
-	TRY_FREE(opts->rulesets);
+	free(opts->rulesets);
 
 	free(opts);
 }
 
 void aquarium_opts_set_base_path(aquarium_opts_t* opts, char const* base_path) {
-	TRY_FREE(opts->base_path);
+	free(opts->base_path);
 	opts->base_path = strdup(base_path);
 
 	// directory paths
 
-	TRY_FREE(opts->templates_path);
-	TRY_FREE(opts->kernels_path);
-	TRY_FREE(opts->overlays_path);
-	TRY_FREE(opts->aquariums_path);
+	free(opts->templates_path);
+	free(opts->kernels_path);
+	free(opts->overlays_path);
+	free(opts->aquariums_path);
 
 	if (asprintf(&opts->templates_path, "%s/" TEMPLATES_PATH, opts->base_path)) {}
 	if (asprintf(&opts->kernels_path,   "%s/" KERNELS_PATH,   opts->base_path)) {}
@@ -151,8 +144,8 @@ void aquarium_opts_set_base_path(aquarium_opts_t* opts, char const* base_path) {
 
 	// file paths
 
-	TRY_FREE(opts->sanctioned_path);
-	TRY_FREE(opts->db_path);
+	free(opts->sanctioned_path);
+	free(opts->db_path);
 
 	if (asprintf(&opts->sanctioned_path, "%s/" SANCTIONED_PATH, opts->base_path)) {}
 	if (asprintf(&opts->db_path,         "%s/" DB_PATH,         opts->base_path)) {}

@@ -178,6 +178,7 @@ static int create_esp(aquarium_opts_t* opts, char const* path) {
 	int rv = -1;
 
 	// create ESP stage
+	// TODO We should probably delete this.
 
 	char* stage = strdup("/tmp/aquarium-esp-stage-XXXXXXX");
 

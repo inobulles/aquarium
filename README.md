@@ -3,7 +3,7 @@
 Repository for the source code of the `aquarium` frontend.
 Aquariums allow you to create virtual environments from automatically-downloaded templates, interact with & mutate them, and then finally create new templates or complete bootable (UEFI+BIOS) images out of them.
 
-Usage examples may be found in the `img` directory.
+Usage examples may be found in the `tests` directory.
 This directory serves to automate building images, such as the aquaBSD installer image.
 
 ## Building
@@ -11,8 +11,32 @@ This directory serves to automate building images, such as the aquaBSD installer
 With [Bob the Builder](https://github.com/inobulles/bob) installed:
 
 ```console
-bob test install
+bob build
 ```
+
+To run the tests:
+
+```console
+sh tests.sh
+```
+
+## Installing
+
+Just:
+
+```console
+bob install
+```
+
+As of Bob v0.2, build scripts are unable to use custom installation instructions.
+This means that, if you would like to use the `aquarium` frontend tool as a user that's member of the `stoners` group, you must manually change ownership and add the setuid flag of the installed binary:
+
+```console
+chown root:wheel /usr/local/bin/aquarium
+chmod +s /usr/local/bin/aquarium
+```
+
+(Depending on your platform, `aquarium` may not have been installed at that exact prefix.)
 
 ## Installed directory structure
 

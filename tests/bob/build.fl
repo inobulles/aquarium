@@ -1,0 +1,10 @@
+import bob
+
+let builder = AquariumBuilder("amd64.freebsd.14-2-release", "builder")
+
+let aquarium = Aquarium("amd64.freebsd.14-2-release")
+aquarium.add_kernel("amd64.freebsd.14-2-release")
+
+builder.install_to(aquarium)
+
+let image = aquarium.image()

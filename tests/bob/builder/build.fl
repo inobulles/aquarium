@@ -1,0 +1,6 @@
+import bob
+
+deps = [
+	Dep.git("https://github.com/inobulles/libcopyfile", "v0.1.1"),
+	Dep.git("https://github.com/inobulles/libmkfs_msdos", "v0.1.0"),
+]

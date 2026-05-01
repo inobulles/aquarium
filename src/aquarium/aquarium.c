@@ -182,6 +182,20 @@ static int do_enter(aquarium_opts_t* opts) {
 	return EXIT_SUCCESS;
 }
 
+static int do_kill(aquarium_opts_t* opts) {
+	char* const aquarium_path = aquarium_db_read_pointer_file(opts, path);
+
+	if (!aquarium_path) {
+		return EXIT_FAILURE;
+	}
+
+	if (aquarium_kill(aquarium_path) < 0) {
+		return EXIT_FAILURE;
+	}
+
+	return EXIT_SUCCESS;
+}
+
 static int do_sweep(aquarium_opts_t* opts) {
 	return aquarium_sweep(opts, true) < 0 ? EXIT_FAILURE : EXIT_SUCCESS;
 }
@@ -453,6 +467,12 @@ int main(int argc, char* argv[]) {
 
 		else if (strcmp(instr, "enter") == 0) {
 			action = do_enter;
+			path = *argv++;
+			argc--;
+		}
+
+		else if (strcmp(instr, "kill") == 0) {
+			action = do_kill;
 			path = *argv++;
 			argc--;
 		}

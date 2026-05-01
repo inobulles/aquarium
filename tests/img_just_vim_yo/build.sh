@@ -1,15 +1,15 @@
 #!/bin/sh
 set -xe
 
-aquarium="../../bin/aquarium -r /tmp/aquariums"
-version="0.1.1-beta"
+aquarium="aquarium -r /tmp/aquariums"
+template="amd64.freebsd.15-0-release"
 pointer="aquarium"
 
 rm -f $pointer
 
-$aquarium -c $pointer -t amd64.aquabsd.$version -k amd64.aquabsd.$version
-$aquarium -e $pointer < custom.sh
-$aquarium -i $pointer -o final.img
+$aquarium -t $template -k $template create $pointer
+$aquarium enter $pointer < custom.sh
+$aquarium image $pointer final.img
 
 rm $pointer
-$aquarium -s
+$aquarium sweep

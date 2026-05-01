@@ -30,7 +30,7 @@ static void strfree(char* const* str_ref) {
 #define CLEANUP_STR __attribute__((cleanup(strfree)))
 
 static bool can_read_all(char* path) {
-	char* const path_argv[] = { path, NULL };
+	char* const path_argv[] = {path, NULL};
 	FTS* const fts = fts_open(path_argv, FTS_PHYSICAL | FTS_XDEV, NULL);
 
 	if (fts == NULL) {
@@ -155,7 +155,7 @@ static int mkdir_recursive(char const* _path) {
 			goto err_mkdir;
 		}
 
-	no_mkdir:
+no_mkdir:
 
 		if (chdir(bit) < 0) {
 			warnx("chdir(\"%s\"): %s", bit, strerror(errno));
@@ -184,7 +184,7 @@ err_cwd:
 }
 
 static int copy_recursive(char* source, char* target) {
-	char* const path_argv[] = { source, NULL };
+	char* const path_argv[] = {source, NULL};
 	FTS* const fts = fts_open(path_argv, FTS_PHYSICAL | FTS_XDEV | FTS_NOCHDIR, NULL);
 
 	if (fts == NULL) {
@@ -231,7 +231,7 @@ static int copy_recursive(char* source, char* target) {
 
 			if (mkdir_recursive(abs_path) < 0) {
 				goto err_mkdir;
-			} 
+			}
 
 			break;
 
@@ -260,7 +260,7 @@ err_mkdir:
 }
 
 static int chown_recursive(char* path, uid_t uid, gid_t gid) {
-	char* const path_argv[] = { path, NULL };
+	char* const path_argv[] = {path, NULL};
 	FTS* const fts = fts_open(path_argv, FTS_PHYSICAL | FTS_XDEV, NULL);
 
 	if (fts == NULL) {

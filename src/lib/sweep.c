@@ -114,7 +114,7 @@ int aquarium_sweep(aquarium_opts_t* opts, bool go_hard) {
 		survivors = realloc(survivors, (survivors_len + 1) * sizeof *survivors);
 		aquarium_db_ent_t* const survivor = &survivors[survivors_len++];
 
-		survivor->pointer_path  = strdup(ent.pointer_path);
+		survivor->pointer_path = strdup(ent.pointer_path);
 		survivor->aquarium_path = strdup(ent.aquarium_path);
 	}
 
@@ -155,7 +155,7 @@ int aquarium_sweep(aquarium_opts_t* opts, bool go_hard) {
 		remove_aquarium(aquarium_path);
 		free(aquarium_path);
 
-	found:
+found:
 
 		continue; // need something after a label in C for some reason
 	}

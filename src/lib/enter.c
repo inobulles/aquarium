@@ -5,26 +5,27 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <sys/queue.h> // XXX for fs/devfs/devfs.h
-#include <fs/devfs/devfs.h>
 #include <jail.h>
+#include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <semaphore.h>
 #include <sys/ioccom.h>
-#include <sys/param.h>
 #include <sys/jail.h>
-#include <sys/procctl.h>
 #include <sys/mount.h>
-#include <sys/stat.h>
+#include <sys/param.h>
+#include <sys/procctl.h>
+#include <sys/queue.h> // XXX for fs/devfs/devfs.h
 #include <sys/queue.h>
+#include <sys/stat.h>
 #include <sys/uio.h>
 #include <unistd.h>
 
-#define TRY_UMOUNT(mountpoint) \
+#include <fs/devfs/devfs.h>
+
+#define TRY_UMOUNT(mountpoint)                                              \
 	if (!access((mountpoint), F_OK) && recursive_umount((mountpoint)) < 0) { \
-		rv = -1; \
+		rv = -1;                                                              \
 	}
 
 static char* jailparam_from_bool(char* buf, size_t n, bool x) {
@@ -56,36 +57,32 @@ static char* jailparam_from_const_ptr(char* buf, size_t n, void const* x) {
 #undef false
 #define false ((bool) 0)
 
-#define JAILPARAM(key, val) do { \
-	if (args_len > nitems(args)) { \
-		warnx("Trying to pass more jailparams than the maximum allowed (%zu, total)!", nitems(args)); \
-		continue; \
-	} \
-	\
-	char buf[256]; \
-	\
-	char* const _val = _Generic((val), \
-		bool: jailparam_from_bool, \
-		uint32_t: jailparam_from_u32, \
-		void*: jailparam_from_ptr, \
-		char*: jailparam_from_ptr, \
-		char const*: jailparam_from_const_ptr \
-	)(buf, sizeof buf, (val)); \
-	\
-	if (jailparam_init(&args[args_len], (key)) < 0) { \
-		warnx("jailparam_init: Unknown jail parameter \"%s\" - are you sure it isn't a pseudo-jailparam?", (key)); \
-		continue; \
-	} \
-	\
-	jailparam_import(&args[args_len], _val); \
-	\
-	args_len++; \
-} while (0)
+#define JAILPARAM(key, val)                                                                                                                                                                                             \
+	do {                                                                                                                                                                                                                 \
+		if (args_len > nitems(args)) {                                                                                                                                                                                    \
+			warnx("Trying to pass more jailparams than the maximum allowed (%zu, total)!", nitems(args));                                                                                                                  \
+			continue;                                                                                                                                                                                                      \
+		}                                                                                                                                                                                                                 \
+                                                                                                                                                                                                                        \
+		char buf[256];                                                                                                                                                                                                    \
+                                                                                                                                                                                                                        \
+		char* const _val = _Generic((val), bool: jailparam_from_bool, uint32_t: jailparam_from_u32, void*: jailparam_from_ptr, char*: jailparam_from_ptr, char const*: jailparam_from_const_ptr)(buf, sizeof buf, (val)); \
+                                                                                                                                                                                                                        \
+		if (jailparam_init(&args[args_len], (key)) < 0) {                                                                                                                                                                 \
+			warnx("jailparam_init: Unknown jail parameter \"%s\" - are you sure it isn't a pseudo-jailparam?", (key));                                                                                                     \
+			continue;                                                                                                                                                                                                      \
+		}                                                                                                                                                                                                                 \
+                                                                                                                                                                                                                        \
+		jailparam_import(&args[args_len], _val);                                                                                                                                                                          \
+                                                                                                                                                                                                                        \
+		args_len++;                                                                                                                                                                                                       \
+	} while (0)
 
-#define CHILD_EXIT(val) do { \
-	c2p_sem != SEM_FAILED && sem_post(c2p_sem); \
-	_exit((val)); \
-} while (0)
+#define CHILD_EXIT(val)                          \
+	do {                                          \
+		c2p_sem != SEM_FAILED&& sem_post(c2p_sem); \
+		_exit((val));                              \
+	} while (0)
 
 #define ILLEGAL_HOSTNAME_CHAR(h) ((h) == '.' || (h) == ' ' || (h) == '/')
 
@@ -209,13 +206,14 @@ static int devfs_apply_opts(aquarium_opts_t* opts) {
 		goto open_err;
 	}
 
-	#define APPLY_RULESET(__ruleset) do { \
-		devfs_rsnum const _ruleset = (__ruleset); \
-		\
-		if (ioctl(fd, DEVFSIO_SAPPLY, &_ruleset) < 0) { \
+#define APPLY_RULESET(__ruleset)                                     \
+	do {                                                              \
+		devfs_rsnum const _ruleset = (__ruleset);                      \
+                                                                     \
+		if (ioctl(fd, DEVFSIO_SAPPLY, &_ruleset) < 0) {                \
 			warnx("DEVFSIO_SAPPLY(%d): %s", _ruleset, strerror(errno)); \
-			goto devfsio_err; \
-		} \
+			goto devfsio_err;                                           \
+		}                                                              \
 	} while (0)
 
 	// we necessarily need to start by hiding everything
@@ -633,7 +631,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 	if (!pid) {
 		// if jail already exists, try entering it straight away
 
-		struct jailparam args[64] = { 0 };
+		struct jailparam args[64] = {0};
 		size_t args_len = 0;
 
 		if (jid >= 0) {
@@ -738,7 +736,7 @@ int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t 
 			sem_post(c2p_sem);
 		}
 
-	inside:
+inside:
 
 		// call the passed callback function
 

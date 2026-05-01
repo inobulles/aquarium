@@ -3,6 +3,8 @@
 
 #pragma once
 
+// clang-format off
+
 static char const* const SANCTIONED =
 	// XXX Linux kernels are unsupported as of yet, so all Linux aquariums are base template only.
 	// Ubuntu 20.04.6 LTS (Focal Fossa).

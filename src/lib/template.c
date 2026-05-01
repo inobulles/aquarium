@@ -1,16 +1,15 @@
 // This Source Form is subject to the terms of the AQUA Software License, v. 1.0.
 // Copyright (c) 2024 Aymeric Wibo
 
-#include <aquarium.h>
 #include "archive.h"
 #include "archive_entry.h"
+#include <aquarium.h>
 #include <assert.h>
 #include <err.h>
 #include <errno.h>
-#include <errno.h>
 #include <fcntl.h>
-#include <openssl/sha.h>
 #include <openssl/evp.h>
+#include <openssl/sha.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,8 +20,8 @@
 #include <archive.h>
 #include <fetch.h>
 
-#define PROGRESS_FREQUENCY  (1 << 22)
-#define FETCH_CHUNK_BYTES   (1 << 16)
+#define PROGRESS_FREQUENCY (1 << 22)
+#define FETCH_CHUNK_BYTES (1 << 16)
 #define ARCHIVE_CHUNK_BYTES (1 << 16)
 
 typedef struct {
@@ -121,7 +120,7 @@ static int check_template(sanctioned_t* sanctioned, char const* path, size_t tot
 		goto err;
 	}
 
-	char hash_hex[SHA256_DIGEST_LENGTH * 2 + 1] = { 0 }; // each byte in the hash can be represented with two hex digits
+	char hash_hex[SHA256_DIGEST_LENGTH * 2 + 1] = {0}; // each byte in the hash can be represented with two hex digits
 
 	for (size_t i = 0; i < sizeof hash; i++) {
 		char prev_hash_hex[sizeof hash_hex];
@@ -172,8 +171,15 @@ int aquarium_download_template(aquarium_opts_t* opts, char const* path, char con
 	sanctioned_t sanctioned;
 
 	while ((line = fgets(buf, sizeof buf, fp))) { // fgets reads one less than 'size', so we're fine just padding 'sizeof buf'
+
 		enum {
-			TYPE, NAME, PROTOCOL, URL, BYTES, SHA256, SENTINEL
+			TYPE,
+			NAME,
+			PROTOCOL,
+			URL,
+			BYTES,
+			SHA256,
+			SENTINEL
 		} tok_kind = 0;
 
 		sanctioned.kind = 0;
@@ -244,7 +250,7 @@ int aquarium_download_template(aquarium_opts_t* opts, char const* path, char con
 
 		goto found;
 
-	next:
+next:
 
 		continue;
 	}
@@ -412,7 +418,7 @@ int aquarium_extract_template(aquarium_opts_t* opts, char const* path, char cons
 archive_read_open_err:
 
 	archive_read_free(archive);
-	
+
 chdir_err:
 download_err:
 
@@ -424,7 +430,7 @@ download_err:
 // template outputting
 
 typedef struct {
-	const char* out;
+	char const* out;
 	int fd;
 } do_out_state_t;
 
@@ -443,7 +449,7 @@ static int do_out_open_cb(struct archive* archive, void* _state) {
 	return ARCHIVE_OK;
 }
 
-static la_ssize_t do_out_write_cb(struct archive* archive, void* _state, const void* buf, size_t len) {
+static la_ssize_t do_out_write_cb(struct archive* archive, void* _state, void const* buf, size_t len) {
 	(void) archive;
 
 	do_out_state_t* const state = _state;
@@ -456,15 +462,17 @@ static int do_out_close_cb(struct archive* archive, void* _state) {
 
 	do_out_state_t* const state = _state;
 
-	if (state->fd >= 0)
+	if (state->fd >= 0) {
 		close(state->fd);
+	}
 
 	return ARCHIVE_OK;
 }
 
 static void strfree(char* const* str) {
-	if (str)
+	if (str) {
 		free(*str);
+	}
 }
 
 int aquarium_template_out(aquarium_opts_t* opts, char const* path, char const* out) {
@@ -475,29 +483,33 @@ int aquarium_template_out(aquarium_opts_t* opts, char const* path, char const* o
 	// make sure everything is unmounted
 	// this will (hopefully) fail if the aquarium is running (i.e. using the filesystems)
 
-	if (aquarium_enter_setdown(path, os) < 0)
+	if (aquarium_enter_setdown(path, os) < 0) {
 		return -1;
+	}
 
 	// create template
 
 	char* const __attribute__((cleanup(strfree))) cwd = getcwd(NULL, 0);
 
-	if (!cwd)
+	if (!cwd) {
 		return -1;
+	}
 
 	char* __attribute__((cleanup(strfree))) abs_template = NULL;
 	asprintf(&abs_template, "%s/%s", cwd, out);
 
-	if (chdir(path) < 0)
+	if (chdir(path) < 0) {
 		errx(EXIT_FAILURE, "chdir: %s", strerror(errno));
+	}
 
 	struct archive* const disk = archive_read_disk_new();
 
 	archive_read_disk_set_standard_lookup(disk);
 	archive_read_disk_set_behavior(disk, ARCHIVE_READDISK_NO_TRAVERSE_MOUNTS);
 
-	if (archive_read_disk_open(disk, ".") != ARCHIVE_OK)
+	if (archive_read_disk_open(disk, ".") != ARCHIVE_OK) {
 		errx(EXIT_FAILURE, "archive_read_disk_open: %s", archive_error_string(disk));
+	}
 
 	// try to deduce compression format to use based on file extension, and if that fails, default to XZ compression
 
@@ -507,14 +519,15 @@ int aquarium_template_out(aquarium_opts_t* opts, char const* path, char const* o
 
 	struct archive* const archive = archive_write_new();
 
-	archive_write_add_filter_xz   (archive); // archive_write_filter(3)
+	archive_write_add_filter_xz(archive);    // archive_write_filter(3)
 	archive_write_set_format_ustar(archive); // archive_write_format(3)
 
 	archive_write_set_filter_option(archive, "xz", "compression-level", "9");
 	archive_write_set_filter_option(archive, "xz", "threads", "0"); // fixed as of https://github.com/libarchive/libarchive/pull/1664
 
-	if (archive_write_open(archive, &state, do_out_open_cb, do_out_write_cb, do_out_close_cb) < 0)
+	if (archive_write_open(archive, &state, do_out_open_cb, do_out_write_cb, do_out_close_cb) < 0) {
 		errx(EXIT_FAILURE, "archive_write_open: %s", archive_error_string(archive));
+	}
 
 	for (;;) {
 		// read next file and write entry
@@ -522,23 +535,28 @@ int aquarium_template_out(aquarium_opts_t* opts, char const* path, char const* o
 		struct archive_entry* const entry = archive_entry_new();
 		int rv = archive_read_next_header2(disk, entry);
 
-		if (rv == ARCHIVE_EOF)
+		if (rv == ARCHIVE_EOF) {
 			break;
+		}
 
-		if (rv != ARCHIVE_OK)
+		if (rv != ARCHIVE_OK) {
 			errx(EXIT_FAILURE, "archive_read_next_header2: %s", archive_error_string(disk));
+		}
 
 		archive_read_disk_descend(disk);
 		rv = archive_write_header(archive, entry);
 
-		if (rv == ARCHIVE_FATAL)
+		if (rv == ARCHIVE_FATAL) {
 			errx(EXIT_FAILURE, "archive_write_header: %s", archive_error_string(archive));
+		}
 
-		if (rv < ARCHIVE_OK)
+		if (rv < ARCHIVE_OK) {
 			warnx("archive_write_header: %s", archive_error_string(archive));
+		}
 
-		if (rv <= ARCHIVE_FAILED)
+		if (rv <= ARCHIVE_FAILED) {
 			goto finish_entry;
+		}
 
 		// write file content
 
@@ -555,12 +573,13 @@ int aquarium_template_out(aquarium_opts_t* opts, char const* path, char const* o
 		ssize_t len;
 		char buf[4096]; // TODO ARCHIVE_CHUNK_BYTES
 
-		while ((len = read(fd, buf, sizeof buf)) > 0)
+		while ((len = read(fd, buf, sizeof buf)) > 0) {
 			archive_write_data(archive, buf, len);
+		}
 
 		close(fd);
 
-	finish_entry:
+finish_entry:
 
 		archive_entry_free(entry);
 	}

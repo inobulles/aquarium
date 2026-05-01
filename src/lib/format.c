@@ -6,17 +6,17 @@
 #include <errno.h>
 #include <geom/geom_ctl.h>
 #include <libgeom.h>
+#include <mkfs_msdos.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <mkfs_msdos.h>
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
 
 #include <libzfs.h>
 
-#define ESP_ALIGN 4096 // 4k boundary
+#define ESP_ALIGN 4096          // 4k boundary
 #define ZFS_ALIGN (1024 * 1024) // 1m boundary
 
 #define MIN_FAT32_CLUSTERS 66581
@@ -74,7 +74,7 @@ static int create_gpt_table(aquarium_drive_t* drive) {
 	gctl_ro_param(handle, "scheme", -1, "gpt");
 	gctl_ro_param(handle, "arg0", -1, drive->provider);
 
-	char const* const err= gctl_issue(handle);
+	char const* const err = gctl_issue(handle);
 
 	if (err) {
 		warnx("Failed to create GPT partition table: %s", err);
@@ -347,10 +347,10 @@ name_err:
 	return rv;
 }
 
-#define ADD_PROP(vdev, err, type, k, ...) \
+#define ADD_PROP(vdev, err, type, k, ...)                 \
 	if (nvlist_add_##type((vdev), (k), __VA_ARGS__) < 0) { \
-		warnx("nvlist_add_" #type ": k = '%s'", k); \
-		goto err; \
+		warnx("nvlist_add_" #type ": k = '%s'", k);         \
+		goto err;                                           \
 	}
 
 static zpool_handle_t* create_zfs_pool(libzfs_handle_t* handle, char const* name, char const* part, char const* mountpoint) {
@@ -437,15 +437,15 @@ vdev_alloc_err:
 	return pool_handle;
 }
 
-#define BE_ROOT_NAME "benv" // name of the root dataset containing all boot environments (equivalent to 'ROOT')
+#define BE_ROOT_NAME "benv"  // name of the root dataset containing all boot environments (equivalent to 'ROOT')
 #define BE_DEFAULT "current" // name of the default boot environment (equivalent to 'default')
 
 typedef enum {
-	FLAG_CANMOUNT_OFF    = 0b0001,
+	FLAG_CANMOUNT_OFF = 0b0001,
 	FLAG_CANMOUNT_NOAUTO = 0b0010,
 
-	FLAG_NO_SETUID       = 0b0100,
-	FLAG_NO_EXEC         = 0b1000,
+	FLAG_NO_SETUID = 0b0100,
+	FLAG_NO_EXEC = 0b1000,
 } flag_t;
 
 static int create_zfs_dataset(libzfs_handle_t* handle, char const* pool, char const* dataset, flag_t flag, char const* mountpoint) {
@@ -577,9 +577,9 @@ int aquarium_format_create_zfs(aquarium_opts_t* opts, aquarium_drive_t* drive, c
 
 	// create datasets
 
-#define DATASET(name, flags, mountpoint) \
+#define DATASET(name, flags, mountpoint)                                      \
 	if (create_zfs_dataset(handle, pool, (name), (flags), (mountpoint)) < 0) { \
-		goto create_dataset_err; \
+		goto create_dataset_err;                                                \
 	}
 
 	// create boot environment datasets
@@ -593,15 +593,15 @@ int aquarium_format_create_zfs(aquarium_opts_t* opts, aquarium_drive_t* drive, c
 	DATASET("usr", FLAG_CANMOUNT_OFF, "/usr");
 	DATASET("var", FLAG_CANMOUNT_OFF, "/var");
 
-	DATASET("usr/home", 0 , "/usr/home");
+	DATASET("usr/home", 0, "/usr/home");
 	DATASET("usr/obj", 0, "/usr/obj");
 	DATASET("usr/ports", FLAG_NO_SETUID, "/usr/ports");
 	DATASET("usr/src", FLAG_NO_SETUID | FLAG_NO_EXEC, "/usr/src");
 
 	DATASET("var/audit", FLAG_NO_SETUID | FLAG_NO_EXEC, "/var/audit");
 	DATASET("var/crash", FLAG_NO_SETUID | FLAG_NO_EXEC, "/var/crash");
-	DATASET("var/log",   FLAG_NO_SETUID | FLAG_NO_EXEC, "/var/log");
-	DATASET("var/mail",  FLAG_NO_SETUID | FLAG_NO_EXEC, "/var/mail");
+	DATASET("var/log", FLAG_NO_SETUID | FLAG_NO_EXEC, "/var/log");
+	DATASET("var/mail", FLAG_NO_SETUID | FLAG_NO_EXEC, "/var/mail");
 
 	// finally, set our active boot environment to the current one
 

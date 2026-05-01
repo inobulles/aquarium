@@ -1,8 +1,8 @@
 // This Source Form is subject to the terms of the AQUA Software License, v. 1.0.
 // Copyright (c) 2023 Aymeric Wibo
 
-#include <aquarium.h>
 #include "copyfile.h"
+#include <aquarium.h>
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -215,12 +215,14 @@ static int create_esp(aquarium_opts_t* opts, char const* path) {
 		char* label_opt;
 		if (asprintf(&label_opt, "-ovolume_label=%s", opts->esp_vol_label)) {}
 
+		// clang-format off
 		execl(
 			"/usr/sbin/makefs", "/usr/sbin/makefs",                // 'makefs' binary location
 			"-tmsdos", "-ofat_type=12", "-osectors_per_cluster=1", // filesystem options
 			"-s1m", oem_string_opt, label_opt,                     // more filesystem options
 			out, stage,                                            // output/input paths
 			NULL);
+		// clang-format on
 
 		_exit(EXIT_FAILURE);
 	}
@@ -277,11 +279,13 @@ static int create_rootfs(aquarium_opts_t* opts, char const* path) {
 		char* label_opt;
 		if (asprintf(&label_opt, "-olabel=%s", opts->rootfs_label)) {}
 
+		// clang-format off
 		execl(
 			"/usr/sbin/makefs", "/usr/sbin/makefs", // 'makefs' binary location
 			"-ZBle", label_opt, "-oversion=2",      // filesystem options
 			out, path,                              // output/input paths
 			NULL);
+		// clang-format on
 
 		_exit(EXIT_FAILURE);
 	}
@@ -332,6 +336,7 @@ static int create_img(aquarium_opts_t* opts, char const* path, char const* out) 
 		char* ufs;
 		if (asprintf(&ufs, "-pfreebsd-ufs/%s:=rootfs.img", opts->rootfs_label)) {}
 
+		// clang-format off
 		execl(
 			"/usr/bin/mkimg", "/usr/bin/mkimg", // 'mkimg' binary location
 			"-sgpt", "-fraw",                   // partition table & image type options
@@ -339,6 +344,7 @@ static int create_img(aquarium_opts_t* opts, char const* path, char const* out) 
 			gptboot, esp, ufs,                  // different partitions
 			"-o", out,                          // output path
 			NULL);
+		// clang-format on
 
 		_exit(EXIT_FAILURE);
 	}

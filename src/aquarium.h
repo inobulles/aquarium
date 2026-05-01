@@ -44,11 +44,11 @@ typedef enum {
 // these can all be found in /etc/defaults/devfs.rules
 
 typedef enum {
-	AQUARIUM_DEVFS_RULESET_HIDE_ALL     = 1, // devfsrules_hide_all
+	AQUARIUM_DEVFS_RULESET_HIDE_ALL = 1,     // devfsrules_hide_all
 	AQUARIUM_DEVFS_RULESET_UNHIDE_BASIC = 2, // devfsrules_unhide_basic
 	AQUARIUM_DEVFS_RULESET_UNHIDE_LOGIN = 3, // devfsrules_unhide_login
-	AQUARIUM_DEVFS_RULESET_JAIL         = 4, // devfsrules_jail
-	AQUARIUM_DEVFS_RULESET_JAIL_VNET    = 5, // devfsrules_jail_vnet
+	AQUARIUM_DEVFS_RULESET_JAIL = 4,         // devfsrules_jail
+	AQUARIUM_DEVFS_RULESET_JAIL_VNET = 5,    // devfsrules_jail_vnet
 } aquarium_devfs_ruleset_t;
 
 // other typedefs
@@ -134,7 +134,7 @@ typedef struct {
 
 // other typedefs
 
-typedef int (*aquarium_enter_cb_t) (void* param);
+typedef int (*aquarium_enter_cb_t)(void* param);
 
 // function prototypes
 
@@ -159,9 +159,12 @@ int aquarium_os_load_bridge_kmod(void);
 
 int aquarium_create_struct(aquarium_opts_t* opts);
 int aquarium_create(
-	aquarium_opts_t* opts, char const* pointer_path,
-	char const* template, char const* kernel_template,
-	char const* const* overlays, size_t overlay_count
+	aquarium_opts_t* opts,
+	char const* pointer_path,
+	char const* template,
+	char const* kernel_template,
+	char const* const* overlays,
+	size_t overlay_count
 );
 
 int aquarium_enter(aquarium_opts_t* opts, char const* path, aquarium_enter_cb_t cb, void* param);
@@ -188,13 +191,16 @@ int aquarium_vnet_dhcp(aquarium_vnet_t* vnet);
 
 // internal macros & functions common to all source files
 
+// clang-format off
 #define __AQUARIUM_IOV(name, val) \
 	(struct iovec) { .iov_base = (name), .iov_len = strlen((name)) + 1 }, \
 	(struct iovec) { .iov_base = (val ), .iov_len = strlen((val )) + 1 }
+// clang-format on
 
 __attribute__((unused)) static int __aquarium_wait_for_process(pid_t pid) {
 	int wstatus = 0;
-	while (waitpid(pid, &wstatus, 0) > 0);
+	while (waitpid(pid, &wstatus, 0) > 0)
+		;
 
 	if (WIFSIGNALED(wstatus)) {
 		if (WTERMSIG(wstatus) == SIGSEGV) {

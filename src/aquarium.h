@@ -5,6 +5,12 @@
 
 // TODO proper error handling with a nice traceback would be nice
 
+// XXX Normally, this should come from /usr/src/sys/contrib/openzfs/include/os/freebsd/spl/sys/sysmacros.h.
+// I am unable to get to work however, as adding /usr/src/sys/contrib/openzfs/include/os/freebsd/spl to the include path messes things up.
+// So just defining this here as a hack for now :)
+
+#define IS_P2ALIGNED(v, a) ((((uintptr_t) (v)) & ((uintptr_t) (a) - 1)) == 0)
+
 #include <err.h>
 #include <net/if.h>
 #include <stdbool.h>
